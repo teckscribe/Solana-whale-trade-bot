@@ -406,8 +406,8 @@
                     <p class="pane-subtitle">Hot-reloadable trading parameters, live connection rate budgets, and log management.</p>
                 </div>
                 <div class="pane-actions">
-                    <button id="save-settings-btn" class="btn btn-primary">
-                        <span class="btn-icon">💾</span> Save & Apply Settings
+                    <button id="refresh-settings-btn" class="btn btn-secondary">
+                        <span class="btn-icon">🔄</span> Reload Settings
                     </button>
                 </div>
             </div>
@@ -518,9 +518,38 @@
 
     </main>
 
+    <!-- Confirm Setting Change Modal -->
+    <div id="confirm-modal" class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">Confirm Setting Change</h3>
+                <button id="modal-close-btn" class="modal-close-btn" aria-label="Close dialog">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Are you sure you want to update <strong id="modal-setting-key" class="code-inline"></strong>?</p>
+                <div class="modal-change-preview">
+                    <div class="change-box">
+                        <span class="change-label">Current Value</span>
+                        <span id="modal-old-val" class="change-val text-rose">--</span>
+                    </div>
+                    <span class="change-arrow">➔</span>
+                    <div class="change-box">
+                        <span class="change-label">New Value</span>
+                        <span id="modal-new-val" class="change-val text-emerald">--</span>
+                    </div>
+                </div>
+                <p class="modal-note">This setting will be atomically written to <code class="code-inline">settings.json</code> and applied live to the bot immediately without restart.</p>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm-btn" class="btn btn-primary">✓ Yes, Apply Change</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Banner -->
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=4.0"></script>
+    <script src="/static/app.js?v=4.2"></script>
 </body>
 </html>

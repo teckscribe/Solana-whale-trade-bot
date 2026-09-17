@@ -565,6 +565,109 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── 9. Tab 4: Settings & Diagnostics ───────────────────────────────────
     let currentSettings = {};
     let settingsSpec = [];
+    let pendingSettingChange = null;
+
+    const confirmModal = document.getElementById('confirm-modal');
+    const modalSettingKey = document.getElementById('modal-setting-key');
+    const modalOldVal = document.getElementById('modal-old-val');
+    const modalNewVal = document.getElementById('modal-new-val');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+
+    function formatDisplayVal(val, type) {
+        if (type === 'bool') {
+            const isTrue = val === true || val === 'true' || val === 1 || val === '1';
+            return isTrue ? 'ENABLED' : 'DISABLED';
+        }
+        if (type === 'choice') {
+            return String(val).toUpperCase();
+        }
+        if (type === 'int') {
+            const parsed = parseInt(val, 10);
+            return isNaN(parsed) ? String(val) : parsed.toString();
+        }
+        if (type === 'float') {
+            const num = parseFloat(val);
+            return isNaN(num) ? String(val) : num.toString();
+        }
+        return String(val);
+    }
+
+    function openConfirmModal(key, oldDisplay, newDisplay, rawNewVal) {
+        pendingSettingChange = { key, newVal: rawNewVal };
+        if (modalSettingKey) modalSettingKey.textContent = key;
+        if (modalOldVal) modalOldVal.textContent = oldDisplay;
+        if (modalNewVal) modalNewVal.textContent = newDisplay;
+        if (confirmModal) confirmModal.classList.add('open');
+    }
+
+    function closeConfirmModal() {
+        pendingSettingChange = null;
+        if (confirmModal) confirmModal.classList.remove('open');
+    }
+
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeConfirmModal);
+    if (modalCancelBtn) modalCancelBtn.addEventListener('click', closeConfirmModal);
+
+    if (confirmModal) {
+        confirmModal.addEventListener('click', (e) => {
+            if (e.target === confirmModal) closeConfirmModal();
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && confirmModal && confirmModal.classList.contains('open')) {
+            closeConfirmModal();
+        }
+    });
+
+    if (modalConfirmBtn) {
+        modalConfirmBtn.addEventListener('click', async () => {
+            if (!pendingSettingChange) return;
+
+            const { key, newVal } = pendingSettingChange;
+            modalConfirmBtn.disabled = true;
+            modalConfirmBtn.textContent = 'Applying...';
+
+            try {
+                const res = await apiFetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, value: newVal })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    currentSettings[key] = newVal;
+
+                    const item = settingsSpec.find(s => s.key === key);
+                    const type = item ? item.type : typeof newVal;
+                    const formatted = formatDisplayVal(newVal, type);
+
+                    const displayEl = document.getElementById(`val-display-${key}`);
+                    if (displayEl) displayEl.textContent = formatted;
+
+                    // Switch back from edit mode to view mode
+                    const viewMode = document.getElementById(`view-mode-${key}`);
+                    const editMode = document.getElementById(`edit-mode-${key}`);
+                    if (viewMode) viewMode.style.display = 'flex';
+                    if (editMode) editMode.classList.remove('active');
+
+                    showToast(`✓ Updated ${key} to ${formatted}!`);
+                    closeConfirmModal();
+                } else {
+                    showToast(`Failed to update ${key}: ${data.message || 'Error'}`, 'error');
+                }
+            } catch (e) {
+                console.error('Save setting error:', e);
+                showToast(`Network error updating ${key}`, 'error');
+            } finally {
+                modalConfirmBtn.disabled = false;
+                modalConfirmBtn.textContent = '✓ Yes, Apply Change';
+            }
+        });
+    }
 
     async function fetchSettings() {
         const container = document.getElementById('settings-container');
@@ -609,12 +712,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = values[key] !== undefined ? values[key] : item.default;
                 const help = item.help || '';
                 const type = item.type;
+                const displayVal = formatDisplayVal(val, type);
 
                 let inputHtml = '';
                 if (type === 'bool') {
                     const isChecked = val === true || val === 'true' || val === 1 || val === '1';
                     inputHtml = `
-                        <select class="setting-input setting-field" data-key="${key}" data-type="bool">
+                        <select class="setting-input setting-field" id="input-${key}" data-key="${key}" data-type="bool">
                             <option value="true" ${isChecked ? 'selected' : ''}>ENABLED</option>
                             <option value="false" ${!isChecked ? 'selected' : ''}>DISABLED</option>
                         </select>
@@ -622,30 +726,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (type === 'choice') {
                     const options = item.options || ['PAPER', 'LIVE'];
                     inputHtml = `
-                        <select class="setting-input setting-field" data-key="${key}" data-type="choice">
+                        <select class="setting-input setting-field" id="input-${key}" data-key="${key}" data-type="choice">
                             ${options.map(opt => `<option value="${opt}" ${String(val).toUpperCase() === opt ? 'selected' : ''}>${opt}</option>`).join('')}
                         </select>
                     `;
                 } else if (type === 'int') {
                     inputHtml = `
-                        <input type="number" step="1" min="${item.min || 0}" max="${item.max || 99999}" 
-                               class="setting-input setting-field" data-key="${key}" data-type="int" value="${val}">
+                        <input type="number" step="1" min="${item.min !== undefined ? item.min : 0}" max="${item.max !== undefined ? item.max : 99999}" 
+                               class="setting-input setting-field" id="input-${key}" data-key="${key}" data-type="int" value="${val}">
                     `;
                 } else {
                     inputHtml = `
-                        <input type="number" step="0.1" min="${item.min || -100}" max="${item.max || 99999}" 
-                               class="setting-input setting-field" data-key="${key}" data-type="float" value="${val}">
+                        <input type="number" step="0.1" min="${item.min !== undefined ? item.min : -100}" max="${item.max !== undefined ? item.max : 99999}" 
+                               class="setting-input setting-field" id="input-${key}" data-key="${key}" data-type="float" value="${val}">
                     `;
                 }
 
                 html += `
-                    <div class="settings-row">
+                    <div class="settings-row" id="row-${key}">
                         <div class="setting-info">
-                            <label class="setting-label">${key}</label>
+                            <label class="setting-label" for="input-${key}">${key}</label>
                             <span class="setting-help">${help}</span>
                         </div>
-                        <div class="setting-input-wrapper">
+
+                        <!-- View Mode (Default) -->
+                        <div class="setting-view-mode" id="view-mode-${key}">
+                            <span class="setting-display-val" id="val-display-${key}">${displayVal}</span>
+                            <button class="btn-edit-setting" data-key="${key}" title="Edit ${key}" aria-label="Edit ${key}">✏️</button>
+                        </div>
+
+                        <!-- Edit Mode (Toggled via ✏️) -->
+                        <div class="setting-edit-mode" id="edit-mode-${key}">
                             ${inputHtml}
+                            <div class="setting-edit-actions">
+                                <button class="btn-inline-save" data-key="${key}" title="Save ${key}">✓</button>
+                                <button class="btn-inline-cancel" data-key="${key}" title="Cancel">✕</button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -657,56 +773,132 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = html;
     }
 
-    // Save Settings
-    const saveSettingsBtn = document.getElementById('save-settings-btn');
-    if (saveSettingsBtn) {
-        saveSettingsBtn.addEventListener('click', async () => {
-            const fields = document.querySelectorAll('.setting-field');
-            let updateCount = 0;
-            let errorCount = 0;
+    // Delegated event handling for Settings container (Edit, Cancel, Save)
+    const settingsContainer = document.getElementById('settings-container');
+    if (settingsContainer) {
+        settingsContainer.addEventListener('click', (e) => {
+            // 1. Edit button (✏️)
+            const editBtn = e.target.closest('.btn-edit-setting');
+            if (editBtn) {
+                const key = editBtn.getAttribute('data-key');
+                const viewMode = document.getElementById(`view-mode-${key}`);
+                const editMode = document.getElementById(`edit-mode-${key}`);
+                const input = document.getElementById(`input-${key}`);
 
-            saveSettingsBtn.disabled = true;
-            saveSettingsBtn.innerHTML = 'Saving...';
-
-            for (const field of fields) {
-                const key = field.getAttribute('data-key');
-                const type = field.getAttribute('data-type');
-                let value = field.value;
-
-                if (type === 'bool') value = (value === 'true');
-                else if (type === 'int') value = parseInt(value, 10);
-                else if (type === 'float') value = parseFloat(value);
-
-                // Only send if changed from cached value
-                if (currentSettings[key] !== value) {
-                    try {
-                        const res = await apiFetch('/api/settings', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ key, value })
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            currentSettings[key] = value;
-                            updateCount++;
-                        } else {
-                            errorCount++;
-                            showToast(`Failed to update ${key}: ${data.message}`, 'error');
+                if (viewMode && editMode) {
+                    viewMode.style.display = 'none';
+                    editMode.classList.add('active');
+                    if (input) {
+                        input.focus();
+                        if (input.select && typeof input.select === 'function') {
+                            input.select();
                         }
-                    } catch (e) {
-                        errorCount++;
+                    }
+                }
+                return;
+            }
+
+            // 2. Cancel button (✕)
+            const cancelBtn = e.target.closest('.btn-inline-cancel');
+            if (cancelBtn) {
+                const key = cancelBtn.getAttribute('data-key');
+                const viewMode = document.getElementById(`view-mode-${key}`);
+                const editMode = document.getElementById(`edit-mode-${key}`);
+                const input = document.getElementById(`input-${key}`);
+
+                // Reset input to currentSettings[key]
+                if (input && currentSettings[key] !== undefined) {
+                    input.value = currentSettings[key];
+                }
+
+                if (viewMode && editMode) {
+                    editMode.classList.remove('active');
+                    viewMode.style.display = 'flex';
+                }
+                return;
+            }
+
+            // 3. Save button (✓)
+            const saveBtn = e.target.closest('.btn-inline-save');
+            if (saveBtn) {
+                const key = saveBtn.getAttribute('data-key');
+                const input = document.getElementById(`input-${key}`);
+                if (!input) return;
+
+                const type = input.getAttribute('data-type');
+                let rawVal = input.value;
+                let typedVal;
+
+                if (type === 'bool') {
+                    typedVal = (rawVal === 'true');
+                } else if (type === 'int') {
+                    typedVal = parseInt(rawVal, 10);
+                    if (isNaN(typedVal)) {
+                        showToast(`Invalid integer value for ${key}`, 'error');
+                        return;
+                    }
+                } else if (type === 'float') {
+                    typedVal = parseFloat(rawVal);
+                    if (isNaN(typedVal)) {
+                        showToast(`Invalid numeric value for ${key}`, 'error');
+                        return;
+                    }
+                } else {
+                    typedVal = rawVal;
+                }
+
+                const currentVal = currentSettings[key];
+                // If identical, inform user and exit edit mode
+                if (currentVal === typedVal) {
+                    showToast(`No changes made to ${key}.`, 'info');
+                    const viewMode = document.getElementById(`view-mode-${key}`);
+                    const editMode = document.getElementById(`edit-mode-${key}`);
+                    if (editMode) editMode.classList.remove('active');
+                    if (viewMode) viewMode.style.display = 'flex';
+                    return;
+                }
+
+                const oldDisplay = formatDisplayVal(currentVal, type);
+                const newDisplay = formatDisplayVal(typedVal, type);
+
+                openConfirmModal(key, oldDisplay, newDisplay, typedVal);
+                return;
+            }
+        });
+
+        // Keyboard shortcuts inside input: Enter to save, Escape to cancel
+        settingsContainer.addEventListener('keydown', (e) => {
+            if (e.target.classList.contains('setting-field')) {
+                const key = e.target.getAttribute('data-key');
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const row = document.getElementById(`row-${key}`);
+                    if (row) {
+                        const saveBtn = row.querySelector('.btn-inline-save');
+                        if (saveBtn) saveBtn.click();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    const row = document.getElementById(`row-${key}`);
+                    if (row) {
+                        const cancelBtn = row.querySelector('.btn-inline-cancel');
+                        if (cancelBtn) cancelBtn.click();
                     }
                 }
             }
+        });
+    }
 
-            saveSettingsBtn.disabled = false;
-            saveSettingsBtn.innerHTML = '<span class="btn-icon">💾</span> Save & Apply Settings';
-
-            if (updateCount > 0 && errorCount === 0) {
-                showToast(`Successfully updated and hot-reloaded ${updateCount} settings!`);
-            } else if (updateCount === 0 && errorCount === 0) {
-                showToast('No configuration changes detected.', 'info');
-            }
+    // Refresh Settings button
+    const refreshSettingsBtn = document.getElementById('refresh-settings-btn');
+    if (refreshSettingsBtn) {
+        refreshSettingsBtn.addEventListener('click', async () => {
+            refreshSettingsBtn.disabled = true;
+            refreshSettingsBtn.innerHTML = '<span class="btn-icon">🔄</span> Reloading...';
+            await fetchSettings();
+            refreshSettingsBtn.disabled = false;
+            refreshSettingsBtn.innerHTML = '<span class="btn-icon">🔄</span> Reload Settings';
+            showToast('Settings reloaded from disk.');
         });
     }
 
