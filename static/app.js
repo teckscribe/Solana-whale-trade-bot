@@ -499,15 +499,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let html = '';
         filtered.forEach(t => {
-            const timeStr = t.timestamp ? new Date(t.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19) : '--';
+            // Support both ISO string (timestamp_entry) and legacy unix epoch (timestamp)
+            let timeStr = '--';
+            const tsRaw = t.timestamp_entry || t.timestamp_exit || t.timestamp;
+            if (tsRaw) {
+                try {
+                    const d = typeof tsRaw === 'number'
+                        ? new Date(tsRaw * 1000)
+                        : new Date(tsRaw);
+                    timeStr = d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+                } catch (_) { timeStr = '--'; }
+            }
+
             const mode = (t.trade_mode || 'PAPER').toUpperCase();
-            const symbol = t.symbol || t.token_symbol || 'TOKEN';
-            const mint = t.mint || t.token_mint || '';
+            // Prefer symbol fields, else shorten the mint/address
+            const mint = t.mint || t.token_mint || t.token_address || '';
+            const symbol = t.symbol || t.token_symbol
+                ? (t.symbol || t.token_symbol)
+                : (mint ? `${mint.slice(0, 4)}...${mint.slice(-4)}` : 'TOKEN');
             const whale = t.whale_wallet || t.whale || '';
             const size = parseFloat(t.trade_size || t.trade_size_usd || 0);
-            const entryPrice = parseFloat(t.entry_price || 0);
-            const exitPrice = parseFloat(t.exit_price || entryPrice);
-            const duration = t.hold_duration_sec ? `${Math.round(t.hold_duration_sec / 60)}m` : (t.duration || '--');
+            const entryPrice = parseFloat(t.entry_price || t.entry_usd_price || 0);
+            const exitPrice = parseFloat(t.exit_price || t.exit_usd_price || entryPrice);
+            // Support both hold_duration_sec and hold_duration_seconds
+            const holdSec = t.hold_duration_sec || t.hold_duration_seconds;
+            const duration = holdSec
+                ? (holdSec >= 3600
+                    ? `${(holdSec / 3600).toFixed(1)}h`
+                    : holdSec >= 60
+                    ? `${Math.round(holdSec / 60)}m`
+                    : `${holdSec}s`)
+                : (t.duration || '--');
             const exitReason = (t.exit_reason || 'MANUAL').toUpperCase();
 
             // P&L calculation
@@ -558,19 +580,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('No trade history available to export', 'error');
                 return;
             }
-            const headers = ['Timestamp', 'Mode', 'Token', 'Mint', 'Whale', 'Trade_Size_USD', 'Entry_Price', 'Exit_Price', 'Exit_Reason', 'Net_Profit_USD'];
-            const rows = allHistoryTrades.map(t => [
-                t.timestamp ? new Date(t.timestamp * 1000).toISOString() : '',
-                t.trade_mode || 'PAPER',
-                t.symbol || '',
-                t.mint || '',
-                t.whale_wallet || '',
-                t.trade_size || 0,
-                t.entry_price || 0,
-                t.exit_price || 0,
-                t.exit_reason || '',
-                t.real_net_profit_usd !== undefined ? t.real_net_profit_usd : (t.net_profit_usd || 0)
-            ]);
+            const headers = ['Timestamp_UTC', 'Mode', 'Token', 'Mint', 'Whale', 'Trade_Size_USD', 'Entry_Price', 'Exit_Price', 'Hold_Duration', 'Exit_Reason', 'Net_Profit_USD'];
+            const rows = allHistoryTrades.map(t => {
+                const tsRaw = t.timestamp_entry || t.timestamp_exit || t.timestamp;
+                let tsStr = '';
+                if (tsRaw) {
+                    try {
+                        tsStr = typeof tsRaw === 'number'
+                            ? new Date(tsRaw * 1000).toISOString()
+                            : new Date(tsRaw).toISOString();
+                    } catch (_) {}
+                }
+                const mint = t.mint || t.token_mint || t.token_address || '';
+                const symbol = t.symbol || t.token_symbol || (mint ? `${mint.slice(0,4)}...${mint.slice(-4)}` : '');
+                const holdSec = t.hold_duration_sec || t.hold_duration_seconds || '';
+                return [
+                    tsStr,
+                    t.trade_mode || 'PAPER',
+                    symbol,
+                    mint,
+                    t.whale_wallet || '',
+                    t.trade_size || t.trade_size_usd || 0,
+                    t.entry_price || t.entry_usd_price || 0,
+                    t.exit_price || t.exit_usd_price || 0,
+                    holdSec,
+                    t.exit_reason || '',
+                    t.real_net_profit_usd !== undefined && t.real_net_profit_usd !== null
+                        ? t.real_net_profit_usd
+                        : (t.net_profit_usd || 0)
+                ];
+            });
 
             const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
             const encodedUri = encodeURI(csvContent);
