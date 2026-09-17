@@ -34,9 +34,22 @@ SOL_MINT = "So11111111111111111111111111111111111111112"
 # CLI subprocess timeout
 _CLI_TIMEOUT = 45.0
 
-# Fee settings — configurable in .env
+# Fee settings — configurable in settings_manager or .env
+import settings_manager
+
 _PRIORITY_FEE = os.getenv("GMGN_PRIORITY_FEE", "0.00001")
-_TIP_FEE      = os.getenv("GMGN_TIP_FEE",      "0.00001")
+_DEFAULT_TIP_FEE = os.getenv("GMGN_TIP_FEE", "0.00001")
+
+def _get_tip_fee_str() -> str:
+    """Dynamically resolves tip fee in SOL from settings_manager."""
+    tip_sol = settings_manager.get("JITO_TIP_SOL")
+    if tip_sol is not None:
+        return f"{float(tip_sol):.6f}"
+    return _DEFAULT_TIP_FEE
+
+def _is_anti_mev_enabled() -> bool:
+    """Checks if Jito / anti-MEV protection is enabled."""
+    return bool(settings_manager.get("JITO_ENABLED", True))
 
 
 async def _run_gmgn_cli(*args) -> dict:
@@ -152,7 +165,7 @@ async def execute_gmgn_buy(
         f"TP +{int(take_profit_pct)}% | SL -{int(abs(stop_loss_pct))}%"
     )
 
-    result = await _run_gmgn_cli(
+    buy_args = [
         "swap",
         "--chain", "sol",
         "--from", wallet_address,
@@ -160,11 +173,15 @@ async def execute_gmgn_buy(
         "--output-token", token_address,
         "--amount", str(sol_lamports),
         "--auto-slippage",
-        "--anti-mev",
+    ]
+    if _is_anti_mev_enabled():
+        buy_args.append("--anti-mev")
+    buy_args.extend([
         "--priority-fee", _PRIORITY_FEE,
-        "--tip-fee", _TIP_FEE,
+        "--tip-fee", _get_tip_fee_str(),
         "--condition-orders", json.dumps(condition_orders),
-    )
+    ])
+    result = await _run_gmgn_cli(*buy_args)
 
     if result.get("_error"):
         log.error(f"GMGN buy failed: {result['_error']}")
@@ -296,7 +313,7 @@ async def execute_gmgn_sell_all(wallet_address: str, token_address: str) -> dict
     """
     log.info(f"GMGN SELL ALL: {token_address[:8]}... (100% of position)")
 
-    result = await _run_gmgn_cli(
+    sell_args = [
         "swap",
         "--chain", "sol",
         "--from", wallet_address,
@@ -304,10 +321,14 @@ async def execute_gmgn_sell_all(wallet_address: str, token_address: str) -> dict
         "--output-token", SOL_MINT,
         "--percent", "100",
         "--auto-slippage",
-        "--anti-mev",
+    ]
+    if _is_anti_mev_enabled():
+        sell_args.append("--anti-mev")
+    sell_args.extend([
         "--priority-fee", _PRIORITY_FEE,
-        "--tip-fee", _TIP_FEE,
-    )
+        "--tip-fee", _get_tip_fee_str(),
+    ])
+    result = await _run_gmgn_cli(*sell_args)
 
     if result.get("_error"):
         log.error(f"GMGN sell-all failed for {token_address[:8]}: {result['_error']}")

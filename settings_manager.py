@@ -57,6 +57,11 @@ SPEC = [
     _s("TRAILING_STOP_ENABLED", "bool", True, group="Risk", help_="Enable high-water-mark trailing stop"),
     _s("TRAILING_STOP_ACTIVATION_PCT", "float", 5.0, min_val=0.5, max_val=100.0, group="Risk", help_="Profit % to activate trailing stop"),
     _s("TRAILING_STOP_CALLBACK_PCT", "float", 3.0, min_val=0.5, max_val=50.0, group="Risk", help_="Retracement % from peak to trigger exit"),
+    _s("JITO_ENABLED", "bool", True, group="Execution", help_="Enable Jito MEV bundle atomic execution"),
+    _s("JITO_TIP_SOL", "float", 0.0001, min_val=0.00001, max_val=0.05, group="Execution", help_="Jito tip in SOL for bundle inclusion"),
+    _s("JITO_DYNAMIC_TIP", "bool", True, group="Execution", help_="Dynamically fetch tip floor percentiles"),
+    _s("JITO_TIP_PERCENTILE", "choice", "p50", options=["p25", "p50", "p75", "p95"], group="Execution", help_="Target tip floor percentile"),
+    _s("JITO_BLOCK_ENGINE_REGION", "choice", "mainnet", options=["mainnet", "amsterdam", "frankfurt", "ny", "tokyo"], group="Execution", help_="Jito block engine region"),
 ]
 
 SPEC_BY_KEY = {e["key"]: e for e in SPEC}
