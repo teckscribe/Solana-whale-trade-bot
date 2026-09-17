@@ -39,7 +39,11 @@ def main():
         description="Scan neutral whales to identify top-performing alpha traders."
     )
     parser.add_argument(
-        "--all", action="store_true", help="Scan all neutral whales regardless of last active date."
+        "--status", type=str, default="NEUTRAL",
+        help="Target database to scan: WHITELIST, NEUTRAL, or BLACKLIST (default: NEUTRAL)."
+    )
+    parser.add_argument(
+        "--all", action="store_true", help="Scan all whales regardless of last active date."
     )
     parser.add_argument(
         "--recent-days", type=float, default=None,
@@ -54,20 +58,20 @@ def main():
         help="Number of top-ranked whales to display in the terminal table (default: 25)."
     )
     parser.add_argument(
-        "--min-wr", type=float, default=50.0,
-        help="Minimum 7-day win rate percentage to qualify as alpha (default: 50.0%%)."
+        "--min-wr", type=float, default=40.0,
+        help="Minimum 7-day win rate percentage to qualify as alpha (default: 40.0%%)."
     )
     parser.add_argument(
         "--min-profit", type=float, default=0.0,
         help="Minimum 7-day realized profit in USD to qualify as alpha (default: $0)."
     )
     parser.add_argument(
-        "--min-trades", type=int, default=5,
-        help="Minimum 7-day trade count to qualify (default: 5)."
+        "--min-trades", type=int, default=3,
+        help="Minimum 7-day trade count to qualify (default: 3)."
     )
     parser.add_argument(
-        "--max-trades", type=int, default=250,
-        help="Maximum 7-day trade count to reject high-frequency sniper bots (default: 250)."
+        "--max-trades", type=int, default=350,
+        help="Maximum 7-day trade count to reject high-frequency sniper bots (default: 350)."
     )
     parser.add_argument(
         "--no-cache", action="store_true",
@@ -78,38 +82,41 @@ def main():
         help="Automatically promote the Top N qualifying alpha whales directly into Whitelist."
     )
     parser.add_argument(
-        "--export-csv", type=str, default=os.path.join(scanner.DATA_DIR, "neutral_whales_ranked.csv"),
+        "--export-csv", type=str, default=None,
         help="Path to export ranked CSV results."
     )
     parser.add_argument(
-        "--export-json", type=str, default=scanner.RANKED_FILE,
+        "--export-json", type=str, default=None,
         help="Path to export ranked JSON results."
     )
 
     args = parser.parse_args()
+    status_target = args.status.upper()
 
     print_banner()
 
     # Determine filter
     recent_days = args.recent_days
     if not args.all and recent_days is None:
-        # Default to 7 days if neither --all nor --recent-days specified
-        recent_days = 7.0
-        print(f"ℹ️  Filtering to wallets active in the last {recent_days:.0f} days. (Use --all to scan entire database)")
+        if status_target == "NEUTRAL":
+            recent_days = 7.0
+            print(f"ℹ️  Filtering to wallets active in the last {recent_days:.0f} days. (Use --all to scan entire database)")
+        else:
+            recent_days = None  # Default to scanning all whitelist wallets
 
-    print("🔍 Discovering neutral candidates in database...")
+    print(f"🔍 Discovering {status_target} candidates in database...")
     candidates = scanner.get_candidates(
-        status_target="NEUTRAL",
+        status_target=status_target,
         recent_days=recent_days,
         limit=args.limit
     )
 
     total_candidates = len(candidates)
     if total_candidates == 0:
-        print("❌ No neutral candidates matched the specified filter criteria.")
+        print(f"❌ No {status_target} candidates matched the specified filter criteria.")
         return
 
-    print(f"📋 Found {total_candidates} neutral candidates to evaluate (sorted by recent activity).")
+    print(f"📋 Found {total_candidates} {status_target} candidates to evaluate (sorted by recent activity).")
     print(f"⚙️  Filters: Min WR: {args.min_wr}% | Min Profit: ${args.min_profit} | Min Trades: {args.min_trades} | Max Trades: {args.max_trades}")
     print("-" * 78)
 
@@ -193,13 +200,20 @@ def main():
     print("-" * 125)
 
     # Save exports
-    if args.export_json:
-        scanner.export_ranked_json(ranked, args.export_json)
-        print(f"💾 Full results saved to JSON: {args.export_json}")
+    export_csv = args.export_csv
+    export_json = args.export_json
+    if not export_csv:
+        prefix = "whitelist" if status_target == "WHITELIST" else "neutral"
+        export_csv = os.path.join(scanner.DATA_DIR, f"{prefix}_whales_ranked.csv")
+    if not export_json:
+        prefix = "whitelist" if status_target == "WHITELIST" else "neutral"
+        export_json = os.path.join(scanner.DATA_DIR, f"{prefix}_whales_ranked.json")
 
-    if args.export_csv:
-        scanner.export_ranked_csv(ranked, args.export_csv)
-        print(f"📊 Spreadsheet exported to CSV: {args.export_csv}")
+    scanner.export_ranked_json(ranked, export_json)
+    print(f"💾 Full results saved to JSON: {export_json}")
+
+    scanner.export_ranked_csv(ranked, export_csv)
+    print(f"📊 Spreadsheet exported to CSV: {export_csv}")
 
     # Auto-whitelist promotion
     if args.auto_whitelist > 0:
