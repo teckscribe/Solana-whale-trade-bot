@@ -105,31 +105,7 @@ Environment=WEB_PORT=${WEB_PORT}
 WantedBy=multi-user.target
 EOF
 
-# Also update the repository copy
-cat <<EOF > "$APP_DIR/wtb.service"
-[Unit]
-Description=wtb — Solana Whale Tracker LIVE Bot
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=${TARGET_USER}
-Group=${TARGET_GROUP}
-WorkingDirectory=${APP_DIR}
-ExecStart=${PYTHON_BIN} main.py
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=wtb
-Environment=PYTHONUNBUFFERED=1
-Environment=WEB_PORT=${WEB_PORT}
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# 3b. wtb-bot.service (Telegram Control Bot)
+# 4b. wtb-bot.service (Telegram Control Bot)
 cat <<EOF | sudo tee /etc/systemd/system/wtb-bot.service >/dev/null
 [Unit]
 Description=wtb — Solana Whale Tracker LIVE Telegram Control Bot
@@ -153,30 +129,7 @@ Environment=WEB_PORT=${WEB_PORT}
 WantedBy=multi-user.target
 EOF
 
-cat <<EOF > "$APP_DIR/wtb-bot.service"
-[Unit]
-Description=wtb — Solana Whale Tracker LIVE Telegram Control Bot
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=${TARGET_USER}
-Group=${TARGET_GROUP}
-WorkingDirectory=${APP_DIR}
-ExecStart=${PYTHON_BIN} telegram_bot.py
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=wtb-bot
-Environment=PYTHONUNBUFFERED=1
-Environment=WEB_PORT=${WEB_PORT}
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# 3c. wtb-web.service (Web Dashboard)
+# 4c. wtb-web.service (Web Dashboard)
 cat <<EOF | sudo tee /etc/systemd/system/wtb-web.service >/dev/null
 [Unit]
 Description=wtb — Solana Whale Tracker Web Dashboard
@@ -200,52 +153,8 @@ Environment=WEB_PORT=${WEB_PORT}
 WantedBy=multi-user.target
 EOF
 
-cat <<EOF > "$APP_DIR/wtb-web.service"
-[Unit]
-Description=wtb — Solana Whale Tracker Web Dashboard
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=${TARGET_USER}
-Group=${TARGET_GROUP}
-WorkingDirectory=${APP_DIR}
-ExecStart=${PYTHON_BIN} web_server.py
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=wtb-web
-Environment=PYTHONUNBUFFERED=1
-Environment=WEB_PORT=${WEB_PORT}
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# 3d. wtb-ngrok.service (Ngrok Tunnel)
+# 4d. wtb-ngrok.service (Ngrok Tunnel)
 cat <<EOF | sudo tee /etc/systemd/system/wtb-ngrok.service >/dev/null
-[Unit]
-Description=wtb — Ngrok Tunnel (Zero-Conflict)
-After=network.target wtb-web.service
-
-[Service]
-Type=simple
-User=${TARGET_USER}
-Group=${TARGET_GROUP}
-WorkingDirectory=${APP_DIR}
-ExecStart=${NGROK_BIN} start wtb_dashboard --config ${APP_DIR}/ngrok.yml --log=stdout
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=wtb-ngrok
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-cat <<EOF > "$APP_DIR/wtb-ngrok.service"
 [Unit]
 Description=wtb — Ngrok Tunnel (Zero-Conflict)
 After=network.target wtb-web.service
