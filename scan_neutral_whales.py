@@ -137,6 +137,14 @@ def main():
                 rate_sleep=1.0
             )
             profiles.append(profile)
+
+            # Live alert if wallet shows strong alpha metrics
+            s7d = profile.get("7d", {})
+            if s7d.get("winrate", 0) >= args.min_wr and s7d.get("realized", 0) >= args.min_profit and s7d.get("trades", 0) >= args.min_trades:
+                print(f"\n  ⭐ [{idx}/{total_candidates}] Alpha candidate found: {w_short} | WR: {s7d.get('winrate', 0):.0f}% | Trades: {s7d.get('trades', 0)} | Profit: +${s7d.get('realized', 0):,.0f}")
+            elif idx % 25 == 0:
+                print(f"\n  📊 Milestone: Scanned {idx}/{total_candidates} wallets ({(idx/total_candidates)*100:.0f}% complete)...")
+
         except Exception as e:
             sys.stdout.write(f"\n⚠️ Error evaluating {w_short}: {e}\n")
 
