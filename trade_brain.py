@@ -145,6 +145,7 @@ class TradingState:
         self.processing_tokens: set = set()
         self.wallet_balance: float = 0.0
         self.initial_balance: float = 0.0
+        self.paper_wallet_version: int = 0
         self.closed_trades: list = []
         self._lock = asyncio.Lock()
 
@@ -791,6 +792,7 @@ def init_json():
             settings_manager.set_paper_wallet_balance(current_bal)
         STATE.initial_balance = init_bal
         STATE.wallet_balance = current_bal
+        STATE.paper_wallet_version = settings_manager.get_paper_wallet_version()
     else:
         if WALLET_FILE and os.path.exists(WALLET_FILE):
             try:
@@ -800,13 +802,6 @@ def init_json():
                 STATE.initial_balance = float(wdata.get("initial", STATE.wallet_balance))
             except Exception as e:
                 log.error(f"Failed to load wallet file {WALLET_FILE}: {e}")
-
-    # Sync with settings if user updated PAPER_BALANCE_USD via UI/Telegram
-    cfg_bal = float(settings_manager.get("PAPER_BALANCE_USD"))
-    if STATE.initial_balance != cfg_bal and cfg_bal > 0 and TRADE_MODE == "PAPER":
-        STATE.initial_balance = cfg_bal
-        STATE.wallet_balance = cfg_bal
-        settings_manager.set_paper_wallet_balance(cfg_bal)
 
 async def _live_dashboard_loop():
     """
@@ -819,6 +814,23 @@ async def _live_dashboard_loop():
             await asyncio.sleep(2)
             _refresh_settings()
             
+            # 0. Sync external paper wallet updates if any occurred outside trade_brain
+            if TRADE_MODE == "PAPER":
+                cur_version = settings_manager.get_paper_wallet_version()
+                cfg_init = float(settings_manager.get("PAPER_BALANCE_USD"))
+                last_ver = getattr(STATE, "paper_wallet_version", 0)
+                if cur_version != last_ver or STATE.initial_balance != cfg_init:
+                    async with STATE._lock:
+                        external_bal = float(settings_manager.get("PAPER_WALLET_BALANCE"))
+                        if STATE.active and STATE.initial_balance > 0:
+                            delta = cfg_init - STATE.initial_balance
+                            STATE.wallet_balance = max(0.0, STATE.wallet_balance + delta)
+                        else:
+                            STATE.wallet_balance = external_bal
+                        STATE.initial_balance = cfg_init
+                        STATE.paper_wallet_version = cur_version
+                    log.info(f"🔄 Synced external paper wallet update: initial=${cfg_init:.2f}, balance=${STATE.wallet_balance:.2f} (v{cur_version})")
+
             # 1. Flush active positions to disk for Web Dashboard / Telegram Bot
             async with STATE._lock:
                 trades_list = STATE.snapshot_active()

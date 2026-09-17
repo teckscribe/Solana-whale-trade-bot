@@ -21,6 +21,11 @@ load_dotenv()
 
 log = logging.getLogger("TelegramNotifier")
 
+try:
+    import discord_notifier
+except ImportError:
+    discord_notifier = None
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
@@ -98,6 +103,8 @@ def send_trade_alert(trade_data: dict):
         f"<i>Action: {action_str}</i>"
     )
     send_message(msg)
+    if discord_notifier:
+        discord_notifier.send_trade_alert(trade_data)
 
 
 def send_discovery_alert(tokens: list):
@@ -113,6 +120,8 @@ def send_discovery_alert(tokens: list):
         
     lines.append("\n<i>Extracting top traders for tracking...</i>")
     send_message("\n".join(lines))
+    if discord_notifier:
+        discord_notifier.send_discovery_alert(tokens)
 
 def send_exit_alert(trade_record: dict):
     """
@@ -174,13 +183,17 @@ def send_exit_alert(trade_record: dict):
         f"<i>Logged to ML Dataset{engine_line}</i>"
     )
     send_message(msg)
+    if discord_notifier:
+        discord_notifier.send_exit_alert(trade_record)
 
 def send_error_alert(error_text: str):
     """
-    Sends a high-priority error alert to Telegram.
+    Sends a high-priority error alert to Telegram and Discord.
     """
     msg = f"⚠️ <b>SYSTEM WARNING</b> ⚠️\n\n{error_text}"
     send_message(msg)
+    if discord_notifier:
+        discord_notifier.send_error_alert(error_text)
 
 def send_gmgn_wallet_approval(stats: dict):
     """

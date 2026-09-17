@@ -28,6 +28,7 @@ import os
 import json
 import logging
 import subprocess
+from typing import Any
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -40,6 +41,17 @@ import urllib.error
 
 # Load env early
 load_dotenv()
+
+import settings_manager
+settings_manager.migrate_from_env()
+
+def _cfg(key: str, default: Any = None) -> Any:
+    """Reads setting from settings_manager with fallback to os.getenv or default."""
+    try:
+        val = settings_manager.get(key)
+        return val if val is not None else default
+    except Exception:
+        return os.getenv(key, default)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID", "0"))
@@ -161,13 +173,11 @@ def _toggle_trade_mode() -> str:
 def _update_env_var(key: str, value: str) -> bool:
     """Updates key in settings_manager (hot-reloaded) and persists to .env."""
     try:
-        import settings_manager
-        ok, _ = settings_manager.update(key, value, source="telegram")
-        if ok:
-            # Also keep .env in sync
-            pass
+        ok, err = settings_manager.update(key, value, source="telegram")
+        if not ok:
+            log.warning(f"settings_manager.update returned failure for {key}: {err}")
     except Exception as e:
-        log.warning(f"settings_manager.update failed for {key}: {e}")
+        log.warning(f"settings_manager.update exception for {key}: {e}")
 
     try:
         with open(ENV_FILE, "r") as f:
@@ -461,21 +471,24 @@ def _dashboard_keyboard() -> InlineKeyboardMarkup:
 
 def _trade_control_keyboard() -> InlineKeyboardMarkup:
     mode_text = "LIVE" if "LIVE" in _get_current_mode() else "PAPER"
-    paper_usd = os.getenv("PAPER_BALANCE_USD", "100.0")
-    max_trades = os.getenv("MAX_CONCURRENT_TRADES", "5")
-    tp_pct = os.getenv("TAKE_PROFIT_PCT", "15.0")
-    sl_pct = os.getenv("STOP_LOSS_PCT", "-5.0")
-    alloc_pct = os.getenv("ALLOCATION_PCT", "10.0")
+    paper_init = float(_cfg("PAPER_BALANCE_USD", 25.0))
+    paper_bal = float(_cfg("PAPER_WALLET_BALANCE", paper_init))
+    max_trades = int(_cfg("MAX_CONCURRENT_TRADES", 5))
+    tp_pct = float(_cfg("TAKE_PROFIT_PCT", 15.0))
+    sl_pct = float(_cfg("STOP_LOSS_PCT", -5.0))
+    alloc_pct = float(_cfg("ALLOCATION_PCT", 10.0))
     
-    timeout_enabled = os.getenv("TIMEOUT_ENABLED", "TRUE").strip().upper() == "TRUE"
+    timeout_enabled = bool(_cfg("TIMEOUT_ENABLED", True))
     timeout_text = "ON" if timeout_enabled else "OFF"
-    timeout_mins = os.getenv("TIMEOUT_MINUTES", "30")
+    timeout_mins = int(_cfg("TIMEOUT_MINUTES", 30))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🔄 Trade Mode: {mode_text}", callback_data="confirm_toggle_mode")],
         [InlineKeyboardButton(f"⏳ Timeout: {timeout_text}", callback_data="confirm_toggle_timeout")],
         [InlineKeyboardButton(f"⏱️ Timeout Time: {timeout_mins}m", callback_data="edit_TIMEOUT_MINUTES")],
-        [InlineKeyboardButton(f"💵 Paper Balance: ${paper_usd}", callback_data="edit_PAPER_BALANCE_USD")],
+        [InlineKeyboardButton(f"💵 Starting: ${paper_init:.2f}", callback_data="edit_PAPER_BALANCE_USD"),
+         InlineKeyboardButton(f"💰 Wallet: ${paper_bal:.2f}", callback_data="view_paper_balance")],
+        [InlineKeyboardButton("🔄 Reset Paper Balance to Starting", callback_data="confirm_reset_paper_wallet")],
         [InlineKeyboardButton(f"🔢 Max Trades: {max_trades}", callback_data="edit_MAX_CONCURRENT_TRADES")],
         [InlineKeyboardButton(f"📈 Take Profit: {tp_pct}%", callback_data="edit_TAKE_PROFIT_PCT")],
         [InlineKeyboardButton(f"🛑 Stop Loss: {sl_pct}%", callback_data="edit_STOP_LOSS_PCT")],
@@ -503,47 +516,47 @@ def _lists_keyboard() -> InlineKeyboardMarkup:
     ])
 
 def _pretrade_keyboard() -> InlineKeyboardMarkup:
-    mom = os.getenv("MOMENTUM_FILTER_ENABLED", "FALSE").strip().upper()
-    mom_display = "ON" if mom == "TRUE" else "OFF"
-    max_pump = os.getenv("MAX_M5_PUMP_PCT", "300.0")
-    min_vol = os.getenv("MIN_24H_VOLUME", "5000.0")
-    min_mc = os.getenv("MIN_MARKET_CAP", "10000.0")
-    disc_int = os.getenv("DISCOVERY_INTERVAL_MINUTES", "10")
-    min_whale_vol = os.getenv("MIN_WHALE_SOL_VOLUME", "1.0")
+    mom = bool(_cfg("MOMENTUM_FILTER_ENABLED", False))
+    mom_display = "ON" if mom else "OFF"
+    max_pump = float(_cfg("MAX_M5_PUMP_PCT", 300.0))
+    min_vol = float(_cfg("MIN_24H_VOLUME", 50000.0))
+    min_mc = float(_cfg("MIN_MARKET_CAP", 50000.0))
+    disc_int = int(_cfg("DISCOVERY_INTERVAL_MINUTES", 10))
+    min_whale_vol = float(_cfg("MIN_TRADE_SOL", 0.02))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🔥 Momentum Filter: {mom_display}", callback_data="confirm_toggle_momentum_filter")],
         [InlineKeyboardButton(f"🚀 Max 5m Pump: {max_pump}%", callback_data="edit_MAX_M5_PUMP_PCT")],
-        [InlineKeyboardButton(f"📊 Min Vol 24h: ${min_vol}", callback_data="edit_MIN_24H_VOLUME")],
-        [InlineKeyboardButton(f"🏛️ Min Market Cap: ${min_mc}", callback_data="edit_MIN_MARKET_CAP")],
+        [InlineKeyboardButton(f"📊 Min Vol 24h: ${min_vol:,.0f}", callback_data="edit_MIN_24H_VOLUME")],
+        [InlineKeyboardButton(f"🏛️ Min Market Cap: ${min_mc:,.0f}", callback_data="edit_MIN_MARKET_CAP")],
         [InlineKeyboardButton(f"⏱️ Discovery Rate: {disc_int}m", callback_data="edit_DISCOVERY_INTERVAL_MINUTES")],
-        [InlineKeyboardButton(f"🐋 Min Whale Vol: {min_whale_vol} SOL", callback_data="edit_MIN_WHALE_SOL_VOLUME")],
+        [InlineKeyboardButton(f"🐋 Min Whale Vol: {min_whale_vol} SOL", callback_data="edit_MIN_TRADE_SOL")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_main")]
     ])
 
 def _gmgn_keyboard() -> InlineKeyboardMarkup:
-    enabled = os.getenv("GMGN_DISCOVERY_ENABLED", "TRUE").strip().upper()
-    enabled_display = "ON" if enabled == "TRUE" else "OFF"
-    winrate = os.getenv("GMGN_MIN_WINRATE", "70.0")
-    min_trades = os.getenv("GMGN_MIN_TRADES", "10")
-    gmgn_max = os.environ.get("GMGN_MAX_TRADES_7D", "ERROR")
-    gmgn_sol = os.getenv("GMGN_MIN_SOL_BALANCE", "1.0")
+    enabled = bool(_cfg("GMGN_DISCOVERY_ENABLED", True))
+    enabled_display = "ON" if enabled else "OFF"
+    winrate = float(_cfg("GMGN_MIN_WINRATE", 70.0))
+    min_trades = int(_cfg("GMGN_MIN_TRADES", 10))
+    gmgn_max = int(_cfg("GMGN_MAX_TRADES_7D", 100))
+    gmgn_sol = float(_cfg("LIVE_FEE_RESERVE_SOL", 0.01))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🟢 GMGN Discovery: {enabled_display}", callback_data="confirm_toggle_gmgn_discovery")],
         [InlineKeyboardButton(f"🏆 Min Winrate: {winrate}%", callback_data="edit_GMGN_MIN_WINRATE")],
         [InlineKeyboardButton(f"🔢 Min Trades: {min_trades}", callback_data="edit_GMGN_MIN_TRADES")],
         [InlineKeyboardButton(f"⏱️ Max Trades 7D: {gmgn_max}", callback_data="edit_GMGN_MAX_TRADES_7D")],
-        [InlineKeyboardButton(f"💰 Min Balance: {gmgn_sol} SOL", callback_data="edit_GMGN_MIN_SOL_BALANCE")],
+        [InlineKeyboardButton(f"💰 Fee Reserve: {gmgn_sol} SOL", callback_data="edit_LIVE_FEE_RESERVE_SOL")],
         [InlineKeyboardButton("🚫 Edit Banned Tags", callback_data="edit_GMGN_BANNED_TAGS")],
         [InlineKeyboardButton("🏋️ Run GMGN ML Training", callback_data="run_ml_training")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_main")]
     ])
 
 def _ml_keyboard() -> InlineKeyboardMarkup:
-    enabled = os.getenv("ML_ENGINE", "FALSE").strip().upper()
-    enabled_display = "ON" if enabled == "TRUE" else "OFF"
-    ml_conf = os.getenv("ML_CONFIDENCE", "45")
+    enabled = bool(_cfg("ML_ENGINE", False))
+    enabled_display = "ON" if enabled else "OFF"
+    ml_conf = float(_cfg("ML_CONFIDENCE", 45))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🧠 ML Engine: {enabled_display}", callback_data="confirm_toggle_ml_engine")],
@@ -559,6 +572,21 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
     await update.message.reply_text("🤖 <b>Control Panel</b>", parse_mode="HTML", reply_markup=_main_keyboard())
+
+async def cmd_reset_wallet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _allowed(update):
+        return
+    ok, new_bal = settings_manager.reset_paper_wallet(source="telegram_command")
+    if ok:
+        await update.message.reply_text(
+            f"✅ <b>Paper Wallet Reset!</b>\n\n"
+            f"Balance reset to starting capital: <b>${new_bal:.2f}</b>\n"
+            f"Live trading engine synchronized in RAM.",
+            parse_mode="HTML",
+            reply_markup=_trade_control_keyboard()
+        )
+    else:
+        await update.message.reply_text("❌ Failed to reset paper wallet.", reply_markup=_trade_control_keyboard())
 
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
@@ -619,10 +647,16 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
                     
         if _update_env_var(key, str(val)):
             os.environ[key] = str(val)
-            await update.message.reply_text(f"✅ Success! {key} updated to {val}.\n🔄 Press Restart to apply.", parse_mode="HTML", reply_markup=_main_keyboard())
-
+            extra_note = ""
+            if key == "PAPER_BALANCE_USD":
+                extra_note = f"\n💵 Paper wallet starting capital and balance set to ${float(val):.2f}."
+            await update.message.reply_text(
+                f"✅ Success! <b>{key}</b> updated to <code>{val}</code>.{extra_note}\n🔄 Live engine automatically synchronized.",
+                parse_mode="HTML",
+                reply_markup=_trade_control_keyboard()
+            )
         else:
-            await update.message.reply_text("❌ Failed to update .env", reply_markup=_main_keyboard())
+            await update.message.reply_text("❌ Failed to update setting.", reply_markup=_main_keyboard())
         return
 
     await update.message.reply_text("Use /start to open the menu.", reply_markup=_main_keyboard())
@@ -686,7 +720,8 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 "toggle_timeout": ("⏳ Toggle Trade Timeout", "menu_trade_control"),
                 "toggle_momentum_filter": ("🔥 Toggle Momentum Filter", "menu_pre_trade"),
                 "toggle_gmgn_discovery": ("🟢 Toggle GMGN Discovery", "menu_gmgn_settings"),
-                "toggle_ml_engine": ("🧠 Toggle ML Engine", "menu_ml_engine")
+                "toggle_ml_engine": ("🧠 Toggle ML Engine", "menu_ml_engine"),
+                "reset_paper_wallet": ("🔄 Reset Paper Wallet to Starting Capital", "menu_trade_control")
             }
             if action in confirm_map:
                 display_text, back_menu = confirm_map[action]
@@ -712,19 +747,24 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             except:
                 db_count = 0
                 
-            mom = os.getenv("MOMENTUM_FILTER_ENABLED", "FALSE").strip().upper()
-            ml = os.getenv("ML_ENGINE", "FALSE").strip().upper()
-            gmgn = os.getenv("GMGN_DISCOVERY_ENABLED", "TRUE").strip().upper()
+            mom = bool(_cfg("MOMENTUM_FILTER_ENABLED", False))
+            ml = bool(_cfg("ML_ENGINE", False))
+            gmgn = bool(_cfg("GMGN_DISCOVERY_ENABLED", True))
+            timeout = bool(_cfg("TIMEOUT_ENABLED", True))
+            timeout_m = int(_cfg("TIMEOUT_MINUTES", 30))
+            p_init = float(_cfg("PAPER_BALANCE_USD", 25.0))
+            p_bal = float(_cfg("PAPER_WALLET_BALANCE", p_init))
             
             text = (
                 f"📊 <b>Bot Status</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"{_service_status()}\n"
                 f"🤖 Trade Mode: <b>{_get_current_mode()}</b>\n"
-                f"⏳ Timeout: <b>{'ON' if os.getenv('TIMEOUT_ENABLED', 'TRUE').strip().upper() == 'TRUE' else 'OFF'}</b> ({os.getenv('TIMEOUT_MINUTES', '30')}m)\n"
-                f"📈 Momentum Filter: <b>{'ON' if mom == 'TRUE' else 'OFF'}</b>\n"
-                f"🧠 ML Engine: <b>{'ON' if ml == 'TRUE' else 'OFF'}</b>\n"
-                f"🟢 GMGN Discovery: <b>{'ON' if gmgn == 'TRUE' else 'OFF'}</b>\n"
+                f"💵 Paper Balance: <b>${p_bal:.2f}</b> (Starting: ${p_init:.2f})\n"
+                f"⏳ Timeout: <b>{'ON' if timeout else 'OFF'}</b> ({timeout_m}m)\n"
+                f"📈 Momentum Filter: <b>{'ON' if mom else 'OFF'}</b>\n"
+                f"🧠 ML Engine: <b>{'ON' if ml else 'OFF'}</b>\n"
+                f"🟢 GMGN Discovery: <b>{'ON' if gmgn else 'OFF'}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🐋 Active Tracked Whales: <b>{tracked_count}</b>\n"
                 f"📂 Total Whales in DB: <b>{db_count}</b>\n"
@@ -955,6 +995,35 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                     reply_markup=_dashboard_keyboard()
                 )
                 
+        elif data == "reset_paper_wallet":
+            _waiting_for.pop(cid, None)
+            ok, new_bal = settings_manager.reset_paper_wallet(source="telegram")
+            if ok:
+                await query.edit_message_text(
+                    f"✅ <b>Paper Wallet Reset!</b>\n\n"
+                    f"Balance reset to starting capital: <b>${new_bal:.2f}</b>\n"
+                    f"Live engine synchronized automatically.",
+                    parse_mode="HTML",
+                    reply_markup=_trade_control_keyboard()
+                )
+            else:
+                await query.edit_message_text("❌ Failed to reset paper wallet.", reply_markup=_trade_control_keyboard())
+
+        elif data == "view_paper_balance":
+            _waiting_for.pop(cid, None)
+            p_init = float(_cfg("PAPER_BALANCE_USD", 25.0))
+            p_bal = float(_cfg("PAPER_WALLET_BALANCE", p_init))
+            pnl = p_bal - p_init
+            pnl_pct = (pnl / p_init * 100.0) if p_init > 0 else 0.0
+            await query.edit_message_text(
+                f"💵 <b>Paper Wallet Balance</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• Starting Capital: <b>${p_init:.2f}</b>\n"
+                f"• Current Balance:  <b>${p_bal:.2f}</b>\n"
+                f"• Net P&L:          <b>{'+' if pnl >= 0 else ''}${pnl:.2f} ({'+' if pnl_pct >= 0 else ''}{pnl_pct:.1f}%)</b>",
+                parse_mode="HTML",
+                reply_markup=_trade_control_keyboard()
+            )
+
         elif data == "toggle_mode":
             _waiting_for.pop(cid, None)
             current = _get_current_mode()
@@ -967,8 +1036,8 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 
         elif data == "toggle_ml_engine":
             _waiting_for.pop(cid, None)
-            current = os.getenv("ML_ENGINE", "FALSE").strip().upper()
-            new_val = "TRUE" if current == "FALSE" else "FALSE"
+            current = bool(_cfg("ML_ENGINE", False))
+            new_val = "FALSE" if current else "TRUE"
             if _update_env_var("ML_ENGINE", new_val):
                 os.environ["ML_ENGINE"] = new_val
                 await query.edit_message_text(f"🧠 <b>ML Engine is now {'ON' if new_val == 'TRUE' else 'OFF'}!</b>\n🔄 Press <b>🔄 Restart</b> to apply.", parse_mode="HTML", reply_markup=_main_keyboard())
@@ -977,8 +1046,8 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 
         elif data == "toggle_timeout":
             _waiting_for.pop(cid, None)
-            current = os.getenv("TIMEOUT_ENABLED", "TRUE").strip().upper()
-            new_val = "TRUE" if current == "FALSE" else "FALSE"
+            current = bool(_cfg("TIMEOUT_ENABLED", True))
+            new_val = "FALSE" if current else "TRUE"
             if _update_env_var("TIMEOUT_ENABLED", new_val):
                 os.environ["TIMEOUT_ENABLED"] = new_val
                 await query.edit_message_text(f"✅ <b>Timeout is now {'ON' if new_val == 'TRUE' else 'OFF'}!</b>\n⚠️ Press <b>🔄 Restart</b> to apply.", parse_mode="HTML", reply_markup=_main_keyboard())
@@ -987,8 +1056,8 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 
         elif data == "toggle_momentum_filter":
             _waiting_for.pop(cid, None)
-            current = os.getenv("MOMENTUM_FILTER_ENABLED", "TRUE").strip().upper()
-            new_val = "TRUE" if current == "FALSE" else "FALSE"
+            current = bool(_cfg("MOMENTUM_FILTER_ENABLED", True))
+            new_val = "FALSE" if current else "TRUE"
             if _update_env_var("MOMENTUM_FILTER_ENABLED", new_val):
                 os.environ["MOMENTUM_FILTER_ENABLED"] = new_val
                 await query.edit_message_text(f"🔥 <b>Momentum Filter is now {'ON' if new_val == 'TRUE' else 'OFF'}!</b>\n🔄 Press <b>🔄 Restart</b> to apply.", parse_mode="HTML", reply_markup=_main_keyboard())
@@ -997,8 +1066,8 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
         elif data == "toggle_gmgn_discovery":
             _waiting_for.pop(cid, None)
-            current = os.getenv("GMGN_DISCOVERY_ENABLED", "TRUE").strip().upper()
-            new_val = "TRUE" if current == "FALSE" else "FALSE"
+            current = bool(_cfg("GMGN_DISCOVERY_ENABLED", True))
+            new_val = "FALSE" if current else "TRUE"
             if _update_env_var("GMGN_DISCOVERY_ENABLED", new_val):
                 os.environ["GMGN_DISCOVERY_ENABLED"] = new_val
                 await query.edit_message_text(f"🟢 <b>GMGN Discovery is now {'ON' if new_val == 'TRUE' else 'OFF'}!</b>\n🔄 Press <b>🔄 Restart</b> to apply.", parse_mode="HTML", reply_markup=_main_keyboard())
@@ -1124,6 +1193,7 @@ def main() -> None:
     
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", cmd_start))
+    app.add_handler(CommandHandler("resetwallet", cmd_reset_wallet))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(callback_handler))
     

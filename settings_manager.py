@@ -224,11 +224,32 @@ def _load() -> dict:
         if _cache["typed"] and (now - _cache["checked"] < _STAT_INTERVAL):
             return _cache["typed"]
         key = _file_key(SETTINGS_FILE)
-        if _cache["typed"] and key is not None and key == _cache["key"]:
+        env_key = _file_key(ENV_FILE)
+        if (_cache["typed"] and key is not None and key == _cache.get("key")
+                and env_key == _cache.get("env_key")):
             _cache["checked"] = now
             return _cache["typed"]
+
         raw = _read_file_raw()
-        _cache.update(key=key, checked=now, raw=raw, typed=_build_typed(raw))
+
+        # Check if .env was modified on disk and has overrides or new values
+        if env_key is not None and _cache.get("env_key") is not None and env_key != _cache.get("env_key"):
+            env_file = _read_env_file()
+            env_changed = False
+            for k in KEYS:
+                if k in env_file:
+                    ok, typed_env, _ = validate(k, env_file[k])
+                    if ok and raw.get(k) != typed_env:
+                        raw[k] = typed_env
+                        env_changed = True
+                        if k == "PAPER_BALANCE_USD":
+                            raw["PAPER_WALLET_BALANCE"] = typed_env
+                            raw["_paper_wallet_version"] = int(raw.get("_paper_wallet_version", 0)) + 1
+            if env_changed:
+                _write_raw(raw)
+                key = _file_key(SETTINGS_FILE)
+
+        _cache.update(key=key, env_key=env_key, checked=now, raw=raw, typed=_build_typed(raw))
         return _cache["typed"]
 
 def get(key: str) -> Any:
@@ -241,11 +262,19 @@ def get_all() -> Dict[str, Any]:
     """Get all current typed values."""
     return dict(_load())
 
+def get_paper_wallet_version() -> int:
+    """Returns the sequence number of external paper wallet updates."""
+    _load()
+    with _lock:
+        return int(_cache.get("raw", {}).get("_paper_wallet_version", 0))
+
 def _write_raw(raw: dict) -> bool:
     body = {
         "_comment": "Runtime settings for WTB. Managed by settings_manager.py.",
         "_updated": datetime.now(timezone.utc).isoformat(),
     }
+    if "_paper_wallet_version" in raw:
+        body["_paper_wallet_version"] = int(raw["_paper_wallet_version"])
     for k in KEYS:
         if k in raw:
             body[k] = raw[k]
@@ -254,7 +283,13 @@ def _write_raw(raw: dict) -> bool:
     ok = _atomic_write_text(SETTINGS_FILE, json.dumps(body, indent=2) + "\n", prefix=".settings.")
     if ok:
         with _lock:
-            _cache.update(key=_file_key(SETTINGS_FILE), checked=time.monotonic(), raw=body, typed=_build_typed(body))
+            _cache.update(
+                key=_file_key(SETTINGS_FILE),
+                env_key=_file_key(ENV_FILE),
+                checked=time.monotonic(),
+                raw=body,
+                typed=_build_typed(body)
+            )
     return ok
 
 def _append_history(key: str, from_val: Any, to_val: Any, source: str) -> None:
@@ -284,7 +319,7 @@ def update(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]:
             return False, err
         
         current_val = current.get(key)
-        if current_val == typed:
+        if current_val == typed and key != "PAPER_BALANCE_USD":
             return True, "" # No change needed
 
         raw = dict(_read_file_raw())
@@ -298,6 +333,14 @@ def update(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]:
         raw[key] = typed
         if key == "PAPER_BALANCE_USD":
             raw["PAPER_WALLET_BALANCE"] = typed
+            raw["_paper_wallet_version"] = int(raw.get("_paper_wallet_version", 0)) + 1
+            _overrides.pop("PAPER_BALANCE_USD", None)
+            _overrides.pop("PAPER_WALLET_BALANCE", None)
+        elif key == "PAPER_WALLET_BALANCE":
+            raw["_paper_wallet_version"] = int(raw.get("_paper_wallet_version", 0)) + 1
+            _overrides.pop("PAPER_WALLET_BALANCE", None)
+        else:
+            _overrides.pop(key, None)
 
         if not _write_raw(raw):
             return False, "could not write settings.json"
@@ -309,13 +352,33 @@ def update(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]:
         
         return True, ""
 
+def reset_paper_wallet(source: str = "unknown") -> Tuple[bool, float]:
+    """Resets current PAPER_WALLET_BALANCE to PAPER_BALANCE_USD and bumps wallet version."""
+    with _lock:
+        raw = dict(_read_file_raw())
+        init_bal = float(raw.get("PAPER_BALANCE_USD", SPEC_BY_KEY["PAPER_BALANCE_USD"]["default"]))
+        cur_bal = float(raw.get("PAPER_WALLET_BALANCE", init_bal))
+        
+        fallback = _build_typed(raw, use_overrides=False)
+        for k in KEYS:
+            raw.setdefault(k, fallback[k])
+            
+        raw["PAPER_WALLET_BALANCE"] = init_bal
+        raw["_paper_wallet_version"] = int(raw.get("_paper_wallet_version", 0)) + 1
+        _overrides.pop("PAPER_WALLET_BALANCE", None)
+        
+        if not _write_raw(raw):
+            return False, 0.0
+            
+        log.info(f"[SETTINGS] Paper wallet reset: ${cur_bal:.2f} -> ${init_bal:.2f} ({source})")
+        _append_history("PAPER_WALLET_BALANCE", str(cur_bal), str(init_bal), source)
+        return True, init_bal
+
 def set_paper_wallet_balance(balance: float) -> bool:
     """Fast-path balance update directly to settings.json without audit log spam."""
     with _lock:
         val = round(float(balance), 6)
         raw = dict(_read_file_raw())
-        raw.pop("_comment", None)
-        raw.pop("_updated", None)
         fallback = _build_typed(raw, use_overrides=False)
         for k in KEYS:
             raw.setdefault(k, fallback[k])
@@ -348,7 +411,12 @@ def migrate_from_env() -> bool:
             log.warning(f"migrate: {err} — using default")
         raw[key] = SPEC_BY_KEY[key]["default"]
         
+    if "PAPER_BALANCE_USD" in raw and "PAPER_WALLET_BALANCE" not in env_file:
+        raw["PAPER_WALLET_BALANCE"] = raw["PAPER_BALANCE_USD"]
+    raw["_paper_wallet_version"] = 1
+
     if _write_raw(raw):
         log.info(f"Created {SETTINGS_FILE} — {len(seeded)} value(s) seeded from .env: {', '.join(seeded)}")
         return True
     return False
+

@@ -82,8 +82,41 @@ class TestSettingsManager(unittest.TestCase):
         ok = settings_manager.set_paper_wallet_balance(42.50)
         self.assertTrue(ok)
         self.assertEqual(settings_manager.get("PAPER_WALLET_BALANCE"), 42.50)
+
+    def test_paper_wallet_versioning_and_reset(self):
+        v1 = settings_manager.get_paper_wallet_version()
+        
+        # Updating starting capital bumps version and resets wallet balance
+        ok, _ = settings_manager.update("PAPER_BALANCE_USD", 75.0, source="test")
+        self.assertTrue(ok)
+        v2 = settings_manager.get_paper_wallet_version()
+        self.assertGreater(v2, v1)
+        self.assertEqual(settings_manager.get("PAPER_BALANCE_USD"), 75.0)
+        self.assertEqual(settings_manager.get("PAPER_WALLET_BALANCE"), 75.0)
+
+        # Fast-path flush updates balance without bumping version
+        settings_manager.set_paper_wallet_balance(60.0)
+        self.assertEqual(settings_manager.get_paper_wallet_version(), v2)
+        self.assertEqual(settings_manager.get("PAPER_WALLET_BALANCE"), 60.0)
+
+        # Reset paper wallet resets balance back to 75.0 and bumps version
+        ok, new_bal = settings_manager.reset_paper_wallet(source="test_reset")
+        self.assertTrue(ok)
+        self.assertEqual(new_bal, 75.0)
+        self.assertEqual(settings_manager.get("PAPER_WALLET_BALANCE"), 75.0)
+        v3 = settings_manager.get_paper_wallet_version()
+        self.assertGreater(v3, v2)
+
         # Reset back for clean state
         settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
+
+    def test_discord_notifier_graceful_when_unconfigured(self):
+        import discord_notifier
+        # Should not throw when called with empty webhook
+        discord_notifier.send_trade_alert({"token": "SOL", "amount": 100, "side": "BUY", "wallet": "TestWallet"})
+        discord_notifier.send_exit_alert({"token_address": "SOL", "exit_reason": "TAKE_PROFIT", "net_profit_percent": 15.0})
+        discord_notifier.send_error_alert("Test error alert")
+
 
 
 class TestConnectionPool(unittest.IsolatedAsyncioTestCase):
