@@ -771,6 +771,19 @@ def init_json():
             _save_json_atomic(file_path, [])
 
     if TRADE_MODE == "PAPER":
+        legacy_paper_file = "paper_wallet.json"
+        if os.path.exists(legacy_paper_file):
+            try:
+                with open(legacy_paper_file, "r") as f:
+                    legacy_data = json.load(f)
+                bal = float(legacy_data.get("balance", 0.0))
+                if bal > 0:
+                    settings_manager.set_paper_wallet_balance(bal)
+                os.remove(legacy_paper_file)
+                log.info(f"Migrated legacy {legacy_paper_file} into settings_manager and deleted file.")
+            except Exception as e:
+                log.debug(f"Could not migrate legacy {legacy_paper_file}: {e}")
+
         init_bal = float(settings_manager.get("PAPER_BALANCE_USD"))
         current_bal = float(settings_manager.get("PAPER_WALLET_BALANCE"))
         if current_bal <= 0.0:

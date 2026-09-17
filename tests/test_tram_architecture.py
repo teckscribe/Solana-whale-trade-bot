@@ -194,13 +194,19 @@ class TestTradingStateTRAM(unittest.IsolatedAsyncioTestCase):
 
     async def test_paper_balance_persistence(self):
         from trade_brain import init_json
+        paper_file = os.path.join(_WTB_DIR, "paper_wallet.json")
+        if os.path.exists(paper_file):
+            try:
+                os.remove(paper_file)
+            except Exception:
+                pass
         settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
         settings_manager.set_paper_wallet_balance(19.75)
         init_json()
         self.assertEqual(STATE.wallet_balance, 19.75)
         self.assertEqual(STATE.initial_balance, 25.0)
         # Verify paper_wallet.json is NOT created
-        self.assertFalse(os.path.exists(os.path.join(_WTB_DIR, "paper_wallet.json")))
+        self.assertFalse(os.path.exists(paper_file))
         # Cleanup
         settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
 
