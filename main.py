@@ -17,6 +17,8 @@ import asyncio
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import os
+import json
+import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -136,6 +138,29 @@ async def ml_retrain_loop():
         except Exception as e:
             log.error(f"Error in ML retraining loop: {e}")
 
+def write_heartbeat(status: str = "running"):
+    """Atomically records process status and heartbeat timestamp for web dashboard."""
+    try:
+        os.makedirs("data", exist_ok=True)
+        hb_file = os.path.join("data", "bot_heartbeat.json")
+        tmp_file = f"{hb_file}.tmp_{os.getpid()}"
+        with open(tmp_file, "w") as f:
+            json.dump({
+                "pid": os.getpid(),
+                "status": status,
+                "timestamp": time.time(),
+                "service": "wtb"
+            }, f)
+        os.replace(tmp_file, hb_file)
+    except Exception:
+        pass
+
+async def heartbeat_loop():
+    """Periodically updates heartbeat file so dashboard knows the scanner is alive."""
+    while True:
+        write_heartbeat("running")
+        await asyncio.sleep(4)
+
 async def main():
     log.info("Starting Solana Whale Tracker Bot with Discovery Engine (TRAM Mode)...")
     
@@ -166,6 +191,9 @@ async def main():
     
     # Start the ML retraining loop
     ml_task = asyncio.create_task(ml_retrain_loop())
+
+    # Start the heartbeat loop for web dashboard status
+    heartbeat_task = asyncio.create_task(heartbeat_loop())
     
     # Start the FastAPI Web Dashboard Server on Port 8101 (or WEB_PORT from .env)
     # If running alongside standalone wtb-web.service, avoids port collisions automatically
@@ -201,6 +229,7 @@ async def main():
         "discovery": discovery_task,
         "json_sync": sync_task,
         "ml_retrain": ml_task,
+        "heartbeat": heartbeat_task,
     }
     if web_task:
         named_tasks["web_dashboard"] = web_task
@@ -208,6 +237,7 @@ async def main():
     try:
         await _supervise(named_tasks)
     finally:
+        write_heartbeat("stopped")
         log.info("Executing graceful shutdown: flushing TRAM state and closing connections...")
         try:
             await flush_all_state_now()

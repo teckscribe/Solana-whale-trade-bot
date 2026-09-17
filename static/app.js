@@ -59,28 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3500);
     }
 
-    // ── 3. Theme Management ────────────────────────────────────────────────
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    const themeIcon = document.getElementById('theme-toggle-icon');
-    const themeText = document.getElementById('theme-toggle-text');
-
-    function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('wtb_theme', theme);
-        const isDark = theme === 'dark';
-        if (themeIcon) themeIcon.textContent = isDark ? '🌙' : '☀️';
-        if (themeText) themeText.textContent = isDark ? 'Dark' : 'Light';
-    }
-
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    applyTheme(currentTheme);
-
-    if (themeBtn) {
-        themeBtn.addEventListener('click', () => {
-            const active = document.documentElement.getAttribute('data-theme') || 'light';
-            applyTheme(active === 'light' ? 'dark' : 'light');
-        });
-    }
+    // ── 3. Theme Enforcement (Light Theme) ─────────────────────────────────
+    document.documentElement.setAttribute('data-theme', 'light');
+    try { localStorage.setItem('wtb_theme', 'light'); } catch (_) {}
 
     // ── 4. Navigation & Tab Switching ──────────────────────────────────────
     let activeTabId = 'live';
@@ -175,6 +156,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await apiFetch('/api/dashboard');
             const data = await res.json();
 
+            // System status indicator (Online / Offline)
+            const statusLabel = document.getElementById('system-status-label');
+            const statusIndicator = document.getElementById('system-status-indicator');
+            const isOnline = data.scanner_active !== false && data.bot_status !== 'OFFLINE';
+
+            if (statusLabel) statusLabel.textContent = isOnline ? 'Online' : 'Offline';
+            if (statusIndicator) {
+                statusIndicator.classList.toggle('status-offline', !isOnline);
+            }
+
             // Mode badge
             const modeBadge = document.getElementById('mode-badge');
             if (modeBadge) {
@@ -228,6 +219,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderActivePositions(data.trades || []);
         } catch (e) {
             console.error('Error fetching dashboard:', e);
+            const statusLabel = document.getElementById('system-status-label');
+            const statusIndicator = document.getElementById('system-status-indicator');
+            if (statusLabel) statusLabel.textContent = 'Offline';
+            if (statusIndicator) statusIndicator.classList.add('status-offline');
         }
     }
 

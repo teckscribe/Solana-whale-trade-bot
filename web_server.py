@@ -18,6 +18,8 @@ Wiring:
 import os
 import re
 import json
+import time
+import subprocess
 import asyncio
 import logging
 import secrets
@@ -158,6 +160,69 @@ async def read_index():
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
     )
 
+def get_scanner_status() -> bool:
+    """
+    Checks whether the trading bot / scanner (main.py / wtb.service) is actively running.
+    Multi-layer check:
+      1. Heartbeat file (data/bot_heartbeat.json) with PID liveness
+      2. systemctl is-active wtb (if on Linux systemd)
+      3. Process search for main.py
+    """
+    # 1. Heartbeat check
+    hb_path = os.path.join(BASE_DIR, "data", "bot_heartbeat.json")
+    if os.path.exists(hb_path):
+        try:
+            with open(hb_path, "r") as f:
+                hb = json.load(f)
+            if hb.get("status") == "running":
+                age = time.time() - float(hb.get("timestamp", 0))
+                if age < 12.0:
+                    pid = hb.get("pid")
+                    if pid and os.name != "nt":
+                        try:
+                            os.kill(pid, 0)
+                            return True
+                        except OSError:
+                            return False
+                    return True
+            elif hb.get("status") == "stopped":
+                return False
+        except Exception:
+            pass
+
+    # 2. Linux systemd check (wtb.service is the bot/scanner service)
+    if os.name != "nt":
+        try:
+            res = subprocess.run(
+                ["systemctl", "is-active", "--quiet", "wtb"],
+                capture_output=True,
+                timeout=1
+            )
+            if res.returncode == 0:
+                return True
+            if res.returncode in [3, 4]:
+                return False
+        except Exception:
+            pass
+
+        # 3. pgrep check for main.py
+        try:
+            res = subprocess.run(
+                ["pgrep", "-f", "main.py"],
+                capture_output=True,
+                timeout=1
+            )
+            if res.returncode == 0 and res.stdout:
+                my_pid = os.getpid()
+                pids = [int(p) for p in res.stdout.decode().split() if p.isdigit() and int(p) != my_pid]
+                if pids:
+                    return True
+        except Exception:
+            pass
+
+    return False
+
+
 @app.get("/api/dashboard")
 async def get_dashboard(_: bool = Depends(require_auth)):
     load_dotenv(override=True)
@@ -261,8 +326,11 @@ async def get_dashboard(_: bool = Depends(require_auth)):
         unrealized_profit += pnl
         total_value += (size + pnl)
         
+    scanner_online = get_scanner_status()
     return {
         "mode": trade_mode,
+        "bot_status": "ONLINE" if scanner_online else "OFFLINE",
+        "scanner_active": scanner_online,
         "total_value": round(total_value, 2),
         "available_cash": round(available_cash, 2),
         "net_profit": round(net_profit, 2),

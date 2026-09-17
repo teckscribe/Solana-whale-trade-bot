@@ -6,23 +6,12 @@
     <title>Solana Whale Trading Terminal — Institutional Desk</title>
     <!-- Force Light Theme Default & Prevent FOUC -->
     <script>
-        (function() {
-            try {
-                let saved = localStorage.getItem('wtb_theme');
-                if (!saved || saved === 'dark') {
-                    saved = 'light';
-                    localStorage.setItem('wtb_theme', 'light');
-                }
-                document.documentElement.setAttribute('data-theme', saved);
-            } catch (e) {
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
-        })();
+        document.documentElement.setAttribute('data-theme', 'light');
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=4.4">
+    <link rel="stylesheet" href="/static/style.css?v=4.5">
 </head>
 <body>
     <!-- Top Global App Bar -->
@@ -60,15 +49,11 @@
         </nav>
 
         <div class="header-right">
-            <div class="status-indicator">
-                <span class="pulse-ring"></span>
-                <span class="status-label">Online</span>
+            <div class="status-indicator" id="system-status-indicator">
+                <span class="pulse-ring" id="system-status-dot"></span>
+                <span class="status-label" id="system-status-label">Online</span>
             </div>
             <div id="mode-badge" class="mode-pill mode-paper">PAPER</div>
-            <button id="theme-toggle-btn" class="theme-switch-btn" title="Toggle Theme">
-                <span id="theme-toggle-icon">☀️</span>
-                <span id="theme-toggle-text" class="desktop-only">Light</span>
-            </button>
         </div>
     </header>
 
@@ -554,6 +539,6 @@
     <!-- Toast Notification Banner -->
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=4.5"></script>
+    <script src="/static/app.js?v=4.6"></script>
 </body>
 </html>
