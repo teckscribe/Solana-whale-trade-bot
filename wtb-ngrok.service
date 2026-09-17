@@ -3,11 +3,16 @@ Description=wtb — Ngrok Tunnel (Zero-Conflict)
 After=network.target wtb-web.service
 
 [Service]
+Type=simple
 User=psms
 Group=psms
+WorkingDirectory=/home/psms/ubuntu/program_files/wtb
 ExecStart=/snap/bin/ngrok start wtb_dashboard --config /home/psms/ubuntu/program_files/wtb/ngrok.yml --log=stdout
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wtb-ngrok
 
 [Install]
 WantedBy=multi-user.target

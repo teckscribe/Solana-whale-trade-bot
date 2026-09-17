@@ -230,12 +230,15 @@ Description=wtb — Ngrok Tunnel (Zero-Conflict)
 After=network.target wtb-web.service
 
 [Service]
+Type=simple
 User=${TARGET_USER}
 Group=${TARGET_GROUP}
 WorkingDirectory=${APP_DIR}
 ExecStart=${NGROK_BIN} start wtb_dashboard --config ${APP_DIR}/ngrok.yml --log=stdout
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=wtb-ngrok
 
 [Install]
@@ -248,12 +251,15 @@ Description=wtb — Ngrok Tunnel (Zero-Conflict)
 After=network.target wtb-web.service
 
 [Service]
+Type=simple
 User=${TARGET_USER}
 Group=${TARGET_GROUP}
 WorkingDirectory=${APP_DIR}
 ExecStart=${NGROK_BIN} start wtb_dashboard --config ${APP_DIR}/ngrok.yml --log=stdout
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=wtb-ngrok
 
 [Install]
