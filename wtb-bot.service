@@ -1,0 +1,19 @@
+[Unit]
+Description=wtb — Solana Whale Tracker LIVE Telegram Control Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=psms
+Group=psms
+WorkingDirectory=/home/psms/ubuntu/program_files/wtb
+ExecStart=/home/psms/ubuntu/program_files/wtb/venv/bin/python3 telegram_bot.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wtb-bot
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

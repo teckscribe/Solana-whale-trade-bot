@@ -1,77 +1,45 @@
-#-------Restart all the bots---------
+# ==============================================================================
+# 🐋 WTB Solana Whale Tracker Bot — Systemd Service Commands (Ubuntu 24.04)
+# ==============================================================================
 
-sudo systemctl restart wtb.service wtb-tg.service wtb-ngrok.service
-
-udo systemctl restart wtb.service wtb-tg.service wtb-ngrok.service
-
-sudo journalctl -u wtb.service -f
-
-
-#---------Managing the Main Bot (wtb.service)---------
-
-
-Start: sudo systemctl start wtb.service
-Stop: sudo systemctl stop wtb.service
-Restart: sudo systemctl restart wtb.service
-View Live Logs: sudo journalctl -u wtb.service -f
-Check Status: sudo systemctl status wtb.service
-
-
-#---------Managing the Telegram Bot (wtb-tg.service)--------
-Start: sudo systemctl start wtb-tg.service
-Stop: sudo systemctl stop wtb-tg.service
-Restart: sudo systemctl restart wtb-tg.service
-View Live Logs: sudo journalctl -u wtb-tg.service -f
-Check Status: sudo systemctl status wtb-tg.service
-
-#--------Manage NGROK server-----------
-
-sudo systemctl daemon-reload
-sudo systemctl restart wtb-ngrok.service
-
-sudo systemctl enable wtb-ngrok.service
-sudo systemctl start wtb-ngrok.service
-
-#--------Manage web ui-----------
-
-sudo systemctl start wtb-ui.service
-sudo systemctl stop wtb-ui.service
-sudo systemctl restart wtb-ui.service
-
-
-# 1. Reset the local config folder
-rm -rf ~/.config/gmgn
-
-#To generate the public and private key
-gmgn-cli config
-
-#To view the public  key
-cat ~/.config/gmgn/keypair.pem
-
-# 2. Apply the API key (read it from ~/.config/gmgn/.env — do not paste it here)
-gmgn-cli config --apply <GMGN_API_KEY>
-
-
-#To check the Configuration
-nano ~/.config/gmgn/keypair.pem
-
-# 3. Apply your Solana Wallet Private Key
-gmgn-cli config --apply 
-
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# REMOVED: a GMGN Ed25519 private key and its public key were pasted here in
-# plaintext. Treat that keypair as compromised and rotate it.
-#
-# Never store secrets in this file. It is a plain notes file with no access
-# controls, sitting inside the app directory. Keys belong in
-# ~/.config/gmgn/.env (chmod 600) on the server and nowhere else.
-#
-# The live keypair is at ~/.config/gmgn/keypair.pem on the server. Read it there
-# when you need it; do not copy it back into the project.
+# ── Service Architecture ──────────────────────────────────────────────────────
+#  • wtb.service        → Main Trading Engine (main.py)
+#  • wtb-bot.service    → Telegram Control Bot (telegram_bot.py) [alias: wtb-tg]
+#  • wtb-web.service    → FastAPI Web Dashboard (web_server.py)  [alias: wtb-ui]
+#  • wtb-ngrok.service  → Ngrok Remote Web Tunnel (ngrok.yml)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# 1. Initial Setup (Run Once on VPS)
+chmod +x install_services.sh
+./install_services.sh
 
+# 2. Check Status of All Services
+sudo systemctl status wtb wtb-bot wtb-web wtb-ngrok
 
+# Or compact check:
+systemctl is-active wtb wtb-bot wtb-web wtb-ngrok
+
+# 3. Start All Services
+sudo systemctl start wtb wtb-bot wtb-web wtb-ngrok
+
+# 4. Stop All Services
+sudo systemctl stop wtb wtb-bot wtb-web wtb-ngrok
+
+# 5. Restart All Services
+sudo systemctl restart wtb wtb-bot wtb-web wtb-ngrok
+
+# 6. Restart Individual Services
+sudo systemctl restart wtb          # Trading engine
+sudo systemctl restart wtb-bot      # Telegram bot
+sudo systemctl restart wtb-web      # Web dashboard
+sudo systemctl restart wtb-ngrok    # Ngrok tunnel
+
+# 7. Live Log Streams
+sudo journalctl -u wtb -f           # Live bot engine stream
+sudo journalctl -u wtb-bot -f       # Telegram bot stream
+sudo journalctl -u wtb-web -f       # Web server stream
+sudo journalctl -u wtb-ngrok -f     # Ngrok tunnel stream
+
+# 8. Git Pull & Fast Refresh
+git pull origin main
+sudo systemctl restart wtb wtb-bot wtb-web wtb-ngrok

@@ -1,0 +1,19 @@
+[Unit]
+Description=wtb — Solana Whale Tracker Web Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=psms
+Group=psms
+WorkingDirectory=/home/psms/ubuntu/program_files/wtb
+ExecStart=/home/psms/ubuntu/program_files/wtb/venv/bin/python3 web_server.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wtb-web
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

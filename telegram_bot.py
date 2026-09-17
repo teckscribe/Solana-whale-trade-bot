@@ -56,7 +56,7 @@ def _cfg(key: str, default: Any = None) -> Any:
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID", "0"))
 SERVICE = "wtb.service"
-UI_SERVICE = "wtb-ui.service"
+UI_SERVICE = "wtb-web.service"
 NGROK_SERVICE = "wtb-ngrok.service"
 
 _BOT_DIR = os.path.dirname(os.path.abspath(__file__))
