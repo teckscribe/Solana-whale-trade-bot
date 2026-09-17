@@ -20,6 +20,7 @@ if _WTB_DIR not in sys.path:
 import settings_manager
 import connection_pool
 import whale_manager
+from position_state import Position, PositionState, VALID_TRANSITIONS
 from trade_brain import STATE, TradingState, flush_all_state_now
 
 
@@ -202,6 +203,218 @@ class TestTradingStateTRAM(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(os.path.exists(os.path.join(_WTB_DIR, "paper_wallet.json")))
         # Cleanup
         settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
+
+
+class TestPositionFSM(unittest.TestCase):
+    """Verifies NautilusTrader-style Finite State Machine and Trailing Stop Engine."""
+
+    def test_valid_lifecycle_transitions(self):
+        pos = Position(
+            token="MintTest111",
+            symbol="TEST",
+            wallet="Whale111",
+            entry_price=1.0,
+            trade_size=10.0,
+            state=PositionState.PENDING_ENTRY,
+        )
+        self.assertEqual(pos.state, PositionState.PENDING_ENTRY)
+
+        # PENDING_ENTRY -> OPEN
+        self.assertTrue(pos.transition_to(PositionState.OPEN))
+        self.assertEqual(pos.state, PositionState.OPEN)
+
+        # OPEN -> TRAILING_PROFIT
+        self.assertTrue(pos.transition_to(PositionState.TRAILING_PROFIT))
+        self.assertEqual(pos.state, PositionState.TRAILING_PROFIT)
+
+        # TRAILING_PROFIT -> PENDING_EXIT
+        self.assertTrue(pos.transition_to(PositionState.PENDING_EXIT))
+        self.assertEqual(pos.state, PositionState.PENDING_EXIT)
+
+        # PENDING_EXIT -> CLOSED
+        self.assertTrue(pos.transition_to(PositionState.CLOSED))
+        self.assertEqual(pos.state, PositionState.CLOSED)
+
+    def test_invalid_lifecycle_transitions(self):
+        pos = Position(
+            token="MintTest222",
+            symbol="TEST",
+            wallet="Whale222",
+            entry_price=1.0,
+            trade_size=10.0,
+            state=PositionState.CLOSED,
+        )
+        # Terminal CLOSED state cannot transition anywhere
+        self.assertFalse(pos.transition_to(PositionState.OPEN))
+        self.assertFalse(pos.transition_to(PositionState.PENDING_EXIT))
+        self.assertEqual(pos.state, PositionState.CLOSED)
+
+        # OPEN cannot go backwards to PENDING_ENTRY
+        pos_open = Position(
+            token="MintTest333",
+            symbol="TEST",
+            wallet="Whale333",
+            entry_price=1.0,
+            trade_size=10.0,
+            state=PositionState.OPEN,
+        )
+        self.assertFalse(pos_open.transition_to(PositionState.PENDING_ENTRY))
+        self.assertEqual(pos_open.state, PositionState.OPEN)
+
+    def test_exit_locking_and_double_sell_prevention(self):
+        pos = Position(
+            token="MintTest444",
+            symbol="TEST",
+            wallet="Whale444",
+            entry_price=1.0,
+            trade_size=10.0,
+            state=PositionState.OPEN,
+        )
+        # First caller obtains exit lock
+        self.assertTrue(pos.begin_exit("TAKE_PROFIT"))
+        self.assertEqual(pos.state, PositionState.PENDING_EXIT)
+        self.assertEqual(pos.exit_reason, "TAKE_PROFIT")
+
+        # Concurrent second caller blocked from initiating duplicate exit
+        self.assertFalse(pos.begin_exit("TIMEOUT"))
+        self.assertEqual(pos.exit_reason, "TAKE_PROFIT")
+
+        # Simulated order failure reverts to OPEN for retry
+        self.assertTrue(pos.revert_exit())
+        self.assertEqual(pos.state, PositionState.OPEN)
+
+        # Retry succeeds
+        self.assertTrue(pos.begin_exit("TIMEOUT"))
+        self.assertTrue(pos.mark_closed(1.25, "TIMEOUT"))
+        self.assertEqual(pos.state, PositionState.CLOSED)
+        self.assertEqual(pos.exit_price, 1.25)
+
+        # Terminal state cannot begin exit
+        self.assertFalse(pos.begin_exit("STOP_LOSS"))
+
+    def test_trailing_stop_activation_and_execution(self):
+        pos = Position(
+            token="MintTest555",
+            symbol="TEST",
+            wallet="Whale555",
+            entry_price=1.0,
+            trade_size=100.0,
+            state=PositionState.OPEN,
+        )
+
+        # 1. Price moves up +3% (below 5% activation) -> No trigger, trailing inactive
+        exit_flag, reason = pos.update_price(
+            1.03,
+            take_profit_pct=25.0,
+            stop_loss_pct=-5.0,
+            trailing_stop_enabled=True,
+            trailing_activation_pct=5.0,
+            trailing_callback_pct=3.0,
+        )
+        self.assertFalse(exit_flag)
+        self.assertFalse(pos.trailing_stop_active)
+        self.assertEqual(pos.state, PositionState.OPEN)
+
+        # 2. Price surges to 1.10 (+10%) -> Trailing stop activates, state becomes TRAILING_PROFIT
+        exit_flag, reason = pos.update_price(
+            1.10,
+            take_profit_pct=25.0,
+            stop_loss_pct=-5.0,
+            trailing_stop_enabled=True,
+            trailing_activation_pct=5.0,
+            trailing_callback_pct=3.0,
+        )
+        self.assertFalse(exit_flag)
+        self.assertTrue(pos.trailing_stop_active)
+        self.assertEqual(pos.state, PositionState.TRAILING_PROFIT)
+        self.assertEqual(pos.high_water_mark_price, 1.10)
+
+        # 3. Price peaks at 1.20 (+20%) -> High-water mark updates to 1.20
+        exit_flag, reason = pos.update_price(
+            1.20,
+            take_profit_pct=25.0,
+            stop_loss_pct=-5.0,
+            trailing_stop_enabled=True,
+            trailing_activation_pct=5.0,
+            trailing_callback_pct=3.0,
+        )
+        self.assertFalse(exit_flag)
+        self.assertEqual(pos.high_water_mark_price, 1.20)
+
+        # 4. Small retracement to 1.18 (-1.67% from peak 1.20, < 3% callback) -> No trigger
+        exit_flag, reason = pos.update_price(
+            1.18,
+            take_profit_pct=25.0,
+            stop_loss_pct=-5.0,
+            trailing_stop_enabled=True,
+            trailing_activation_pct=5.0,
+            trailing_callback_pct=3.0,
+        )
+        self.assertFalse(exit_flag)
+
+        # 5. Retracement to 1.15 (-4.17% from peak 1.20, >= 3% callback) -> Triggers TRAILING_STOP!
+        exit_flag, reason = pos.update_price(
+            1.15,
+            take_profit_pct=25.0,
+            stop_loss_pct=-5.0,
+            trailing_stop_enabled=True,
+            trailing_activation_pct=5.0,
+            trailing_callback_pct=3.0,
+        )
+        self.assertTrue(exit_flag)
+        self.assertEqual(reason, "TRAILING_STOP")
+        # Position locked in +15% profit instead of riding down to stop loss!
+        self.assertAlmostEqual(pos.profit_pct, 15.0, places=1)
+
+    def test_static_stop_loss_trigger(self):
+        pos = Position(
+            token="MintTest666",
+            symbol="TEST",
+            wallet="Whale666",
+            entry_price=2.0,
+            trade_size=50.0,
+            state=PositionState.OPEN,
+        )
+        # Price drops to 1.88 (-6% from 2.0, <= -5% stop loss)
+        exit_flag, reason = pos.update_price(
+            1.88,
+            take_profit_pct=15.0,
+            stop_loss_pct=-5.0,
+            trailing_stop_enabled=True,
+            trailing_activation_pct=5.0,
+            trailing_callback_pct=3.0,
+        )
+        self.assertTrue(exit_flag)
+        self.assertEqual(reason, "STOP_LOSS")
+
+    def test_dict_interface_compatibility(self):
+        pos = Position(
+            token="MintTest777",
+            symbol="SOLPUMP",
+            wallet="Whale777",
+            entry_price=10.0,
+            trade_size=100.0,
+            state=PositionState.OPEN,
+        )
+        # Dict access
+        self.assertEqual(pos["token"], "MintTest777")
+        self.assertEqual(pos["whale_wallet"], "Whale777")
+        self.assertEqual(pos.get("trade_size"), 100.0)
+        self.assertIn("entry_price", pos)
+
+        # Dict mutation
+        pos["current_price"] = 12.0
+        self.assertEqual(pos.current_price, 12.0)
+
+        # Serialization and deserialization
+        pos_dict = pos.to_dict()
+        self.assertIsInstance(pos_dict, dict)
+        self.assertEqual(pos_dict["state"], "OPEN")
+
+        restored_pos = Position.from_dict(pos_dict)
+        self.assertEqual(restored_pos.token, pos.token)
+        self.assertEqual(restored_pos.current_price, 12.0)
+        self.assertEqual(restored_pos.state, PositionState.OPEN)
 
 
 if __name__ == "__main__":

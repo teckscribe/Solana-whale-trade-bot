@@ -69,6 +69,7 @@ def _refresh_settings():
     global MAX_CONCURRENT_TRADES, MIN_24H_VOLUME, MIN_MARKET_CAP
     global PAPER_FEE_PCT_PER_LEG, MAX_PRICE_IMPACT_PCT, MAX_POOL_SHARE_PCT
     global MAX_PORTFOLIO_EXPOSURE_PCT, POLL_INTERVAL, LIVE_TRADES_FILE, WALLET_FILE
+    global TRAILING_STOP_ENABLED, TRAILING_STOP_ACTIVATION_PCT, TRAILING_STOP_CALLBACK_PCT
     try:
         TRADE_MODE = settings_manager.get("TRADE_MODE")
         ALLOCATION_PCT = float(settings_manager.get("ALLOCATION_PCT"))
@@ -89,6 +90,9 @@ def _refresh_settings():
         MAX_PRICE_IMPACT_PCT = float(settings_manager.get("MAX_PRICE_IMPACT_PCT"))
         MAX_POOL_SHARE_PCT = float(settings_manager.get("MAX_POOL_SHARE_PCT"))
         MAX_PORTFOLIO_EXPOSURE_PCT = float(settings_manager.get("MAX_PORTFOLIO_EXPOSURE_PCT"))
+        TRAILING_STOP_ENABLED = bool(settings_manager.get("TRAILING_STOP_ENABLED"))
+        TRAILING_STOP_ACTIVATION_PCT = float(settings_manager.get("TRAILING_STOP_ACTIVATION_PCT"))
+        TRAILING_STOP_CALLBACK_PCT = float(settings_manager.get("TRAILING_STOP_CALLBACK_PCT"))
         POLL_INTERVAL = max(2.0, (60 * MAX_CONCURRENT_TRADES) / 280.0)
 
         if TRADE_MODE == "PAPER":
@@ -100,6 +104,7 @@ def _refresh_settings():
     except Exception as e:
         log.warning(f"Failed to refresh settings: {e}")
 
+from position_state import Position, PositionState
 from ml_engine import predict_trade
 from momentum_filter import check_momentum
 
@@ -136,7 +141,7 @@ class TradingState:
     Zero disk I/O on hot trading paths.
     """
     def __init__(self):
-        self.active: Dict[str, dict] = {}
+        self.active: Dict[str, Position] = {}
         self.processing_tokens: set = set()
         self.wallet_balance: float = 0.0
         self.initial_balance: float = 0.0
@@ -145,19 +150,30 @@ class TradingState:
 
     def get_open_exposure_usd(self) -> float:
         return sum(
-            t.get("trade_size", t.get("trade_size_usd", 0.0))
-            for t in self.active.values()
+            pos.trade_size if isinstance(pos, Position) else pos.get("trade_size", pos.get("trade_size_usd", 0.0))
+            for pos in self.active.values()
         )
 
-    def add_position(self, token: str, position: dict):
+    def add_position(self, token: str, position: Any):
+        if isinstance(position, dict):
+            position = Position.from_dict(position)
         self.active[token] = position
 
-    def remove_position(self, token: str) -> Optional[dict]:
+    def get_position(self, token: str) -> Optional[Position]:
+        return self.active.get(token)
+
+    def remove_position(self, token: str) -> Optional[Any]:
         return self.active.pop(token, None)
 
     def update_position(self, token: str, updates: dict):
         if token in self.active:
-            self.active[token].update(updates)
+            pos = self.active[token]
+            if isinstance(pos, Position):
+                for k, v in updates.items():
+                    if hasattr(pos, k):
+                        setattr(pos, k, v)
+            else:
+                pos.update(updates)
 
     def debit_balance(self, amount: float) -> bool:
         if self.wallet_balance < amount or amount <= 0:
@@ -172,7 +188,10 @@ class TradingState:
         self.closed_trades.append(record)
 
     def snapshot_active(self) -> list:
-        return list(self.active.values())
+        return [
+            pos.to_dict() if isinstance(pos, Position) else pos
+            for pos in self.active.values()
+        ]
 
 STATE = TradingState()
 
@@ -396,6 +415,9 @@ async def close_gmgn_trade(
 
     # Remove from the live dashboard
     async with _dashboard_lock:
+        pos = STATE.get_position(token)
+        if pos and isinstance(pos, Position):
+            pos.mark_closed(exit_price, reason)
         _active_trades.pop(token, None)
 
     if fill_available:
@@ -978,11 +1000,22 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
         and retry the close next loop.
         """
         nonlocal close_retry_count
+        pos = STATE.get_position(token)
+        if pos and isinstance(pos, Position):
+            if not pos.begin_exit(reason):
+                log.info(f"Exit already in progress for {token[:8]} ({pos.state.value}). Skipping duplicate attempt.")
+                return False
+
         closed = await close_trade(wallet, token, entry_time, entry_price, exit_price_val, max_profit, reason, trade_size,
                                    actual_entry_cost_usd=actual_entry_cost_usd,
                                    tokens_held=tokens_held, token_decimals=token_decimals)
         if closed:
+            if pos and isinstance(pos, Position):
+                pos.mark_closed(exit_price_val, reason)
             return True
+
+        if pos and isinstance(pos, Position):
+            pos.revert_exit()
 
         close_retry_count += 1
         if close_retry_count >= MAX_CLOSE_RETRIES:
@@ -1049,11 +1082,27 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
             
         last_valid_price = current_price
             
-        profit_pct = ((current_price - entry_price) / entry_price) * 100
-        profit_usd = trade_size * (profit_pct / 100)
-        
-        if profit_pct > max_profit:
-            max_profit = profit_pct
+        pos = STATE.get_position(token)
+        should_exit = False
+        exit_trigger = ""
+        if pos and isinstance(pos, Position):
+            pos.elapsed = int(elapsed)
+            should_exit, exit_trigger = pos.update_price(
+                current_price,
+                TAKE_PROFIT_PCT,
+                STOP_LOSS_PCT,
+                trailing_stop_enabled=TRAILING_STOP_ENABLED,
+                trailing_activation_pct=TRAILING_STOP_ACTIVATION_PCT,
+                trailing_callback_pct=TRAILING_STOP_CALLBACK_PCT,
+            )
+            max_profit = pos.max_profit
+            profit_pct = pos.profit_pct
+            profit_usd = pos.profit_usd
+        else:
+            profit_pct = ((current_price - entry_price) / entry_price) * 100
+            profit_usd = trade_size * (profit_pct / 100)
+            if profit_pct > max_profit:
+                max_profit = profit_pct
             
         async with _dashboard_lock:
             if token in _active_trades:
@@ -1063,6 +1112,11 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
                 _active_trades[token]["profit_usd"] = profit_usd
                 _active_trades[token]["elapsed"] = int(elapsed)
             
+        if should_exit:
+            if await _attempt_close(exit_trigger, current_price):
+                break
+            continue
+
         if profit_pct >= TAKE_PROFIT_PCT:
             if await _attempt_close("TAKE_PROFIT", current_price):
                 break
@@ -1459,23 +1513,19 @@ async def record_trade(trade_data: dict):
                     send_trade_alert(alert_data)
 
                     entry_time = datetime.now(timezone.utc)
+                    pos = Position(
+                        token=token_address,
+                        symbol=symbol,
+                        wallet=wallet,
+                        entry_price=entry_price,
+                        trade_size=trade_size,
+                        entry_time=entry_time.isoformat(),
+                        mode=TRADE_MODE,
+                        execution_engine="GMGN",
+                        strategy_order_id=strategy_order_id,
+                    )
                     async with _dashboard_lock:
-                        _active_trades[token_address] = {
-                            "token": token_address,
-                            "symbol": symbol,
-                            "wallet": wallet,
-                            "entry_price": entry_price,
-                            "current_price": entry_price,
-                            "trade_size": trade_size,
-                            "profit_pct": 0.0,
-                            "profit_usd": 0.0,
-                            "max_profit": 0.0,
-                            "elapsed": 0,
-                            "entry_time": entry_time.isoformat(),
-                            "mode": TRADE_MODE,
-                            "execution_engine": "GMGN",
-                            "strategy_order_id": strategy_order_id,
-                        }
+                        STATE.add_position(token_address, pos)
 
                     task = asyncio.create_task(
                         monitor_gmgn_position(
@@ -1504,24 +1554,22 @@ async def record_trade(trade_data: dict):
                     send_trade_alert(alert_data)
 
                     entry_time = datetime.now(timezone.utc)
+                    pos = Position(
+                        token=token_address,
+                        symbol=symbol,
+                        wallet=wallet,
+                        entry_price=entry_price,
+                        trade_size=trade_size,
+                        tokens_held=tokens_held,
+                        token_decimals=token_decimals,
+                        entry_price_impact_pct=impact_pct,
+                        actual_entry_cost_usd=actual_entry_cost_usd,
+                        entry_time=entry_time.isoformat(),
+                        mode=TRADE_MODE,
+                        execution_engine="JUPITER",
+                    )
                     async with _dashboard_lock:
-                        _active_trades[token_address] = {
-                            "token": token_address,
-                            "symbol": symbol,
-                            "wallet": wallet,
-                            "entry_price": entry_price,
-                            "current_price": entry_price,
-                            "trade_size": trade_size,
-                            "tokens_held": tokens_held,
-                            "token_decimals": token_decimals,
-                            "entry_price_impact_pct": impact_pct,
-                            "profit_pct": 0.0,
-                            "profit_usd": 0.0,
-                            "max_profit": 0.0,
-                            "elapsed": 0,
-                            "entry_time": entry_time.isoformat(),
-                            "mode": TRADE_MODE,
-                        }
+                        STATE.add_position(token_address, pos)
 
                     task = asyncio.create_task(
                         monitor_position(wallet, token_address, entry_price, entry_time,

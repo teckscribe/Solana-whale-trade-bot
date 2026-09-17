@@ -54,6 +54,9 @@ SPEC = [
     _s("PAPER_WALLET_BALANCE", "float", 25.0, min_val=0.0, max_val=100000.0, group="General", help_="Current simulated paper wallet balance in USD"),
     _s("POLL_INTERVAL", "float", 2.0, min_val=1.0, max_val=30.0, group="General", help_="Polling interval (dynamically computed in trade_brain)"),
     _s("MAX_RESUME_AGE_HOURS", "float", 2.0, min_val=0.1, max_val=48.0, group="General", help_="Maximum age in hours of saved positions to resume on startup"),
+    _s("TRAILING_STOP_ENABLED", "bool", True, group="Risk", help_="Enable high-water-mark trailing stop"),
+    _s("TRAILING_STOP_ACTIVATION_PCT", "float", 5.0, min_val=0.5, max_val=100.0, group="Risk", help_="Profit % to activate trailing stop"),
+    _s("TRAILING_STOP_CALLBACK_PCT", "float", 3.0, min_val=0.5, max_val=50.0, group="Risk", help_="Retracement % from peak to trigger exit"),
 ]
 
 SPEC_BY_KEY = {e["key"]: e for e in SPEC}
