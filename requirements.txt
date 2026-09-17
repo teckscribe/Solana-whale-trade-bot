@@ -1,0 +1,17 @@
+solana==0.34.0
+solders==0.21.0
+websockets>=9.0,<12.0
+python-dotenv==1.0.1
+python-telegram-bot==21.1.1
+scikit-learn>=1.0.2
+pandas>=1.3.5
+joblib>=1.1.0
+httpx>=0.28.0
+fastapi>=0.100.0
+uvicorn>=0.20.0
+# Used directly by trade_brain.restore_active_trades(). It resolved only because pandas
+# happens to pull it in; declare it so a slimmed-down install doesn't break crash recovery.
+python-dateutil>=2.8.2
+
+
+

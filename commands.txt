@@ -1,0 +1,77 @@
+#-------Restart all the bots---------
+
+sudo systemctl restart wtb.service wtb-tg.service wtb-ngrok.service
+
+udo systemctl restart wtb.service wtb-tg.service wtb-ngrok.service
+
+sudo journalctl -u wtb.service -f
+
+
+#---------Managing the Main Bot (wtb.service)---------
+
+
+Start: sudo systemctl start wtb.service
+Stop: sudo systemctl stop wtb.service
+Restart: sudo systemctl restart wtb.service
+View Live Logs: sudo journalctl -u wtb.service -f
+Check Status: sudo systemctl status wtb.service
+
+
+#---------Managing the Telegram Bot (wtb-tg.service)--------
+Start: sudo systemctl start wtb-tg.service
+Stop: sudo systemctl stop wtb-tg.service
+Restart: sudo systemctl restart wtb-tg.service
+View Live Logs: sudo journalctl -u wtb-tg.service -f
+Check Status: sudo systemctl status wtb-tg.service
+
+#--------Manage NGROK server-----------
+
+sudo systemctl daemon-reload
+sudo systemctl restart wtb-ngrok.service
+
+sudo systemctl enable wtb-ngrok.service
+sudo systemctl start wtb-ngrok.service
+
+#--------Manage web ui-----------
+
+sudo systemctl start wtb-ui.service
+sudo systemctl stop wtb-ui.service
+sudo systemctl restart wtb-ui.service
+
+
+# 1. Reset the local config folder
+rm -rf ~/.config/gmgn
+
+#To generate the public and private key
+gmgn-cli config
+
+#To view the public  key
+cat ~/.config/gmgn/keypair.pem
+
+# 2. Apply the API key (read it from ~/.config/gmgn/.env — do not paste it here)
+gmgn-cli config --apply <GMGN_API_KEY>
+
+
+#To check the Configuration
+nano ~/.config/gmgn/keypair.pem
+
+# 3. Apply your Solana Wallet Private Key
+gmgn-cli config --apply 
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REMOVED: a GMGN Ed25519 private key and its public key were pasted here in
+# plaintext. Treat that keypair as compromised and rotate it.
+#
+# Never store secrets in this file. It is a plain notes file with no access
+# controls, sitting inside the app directory. Keys belong in
+# ~/.config/gmgn/.env (chmod 600) on the server and nowhere else.
+#
+# The live keypair is at ~/.config/gmgn/keypair.pem on the server. Read it there
+# when you need it; do not copy it back into the project.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Whale Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="bg-orb"></div>
+    <button id="desktop-toggle" class="desktop-toggle">☰</button>
+    
+    <div class="mobile-header">
+        <h2 class="brand">🐋 Solana Whale Trading Bot</h2>
+        <button id="mobile-toggle" class="sidebar-toggle">☰</button>
+    </div>
+    
+    <div class="sidebar" id="sidebar">
+        <div class="desktop-brand" style="display: flex; justify-content: space-between; align-items: center; padding: 0 20px 20px 20px; border-bottom: 1px solid var(--border-glass); margin-bottom: 25px;">
+            <h2 class="brand" style="margin: 0; padding: 0; border: none;">🐋 Whale Bot</h2>
+            <button id="sidebar-close" class="sidebar-toggle" style="font-size: 1.2rem; padding: 5px;">✖</button>
+        </div>
+        <ul class="nav-links">
+            <li class="active" data-target="dashboard">
+                <span>📈 Trading Dash Board</span>
+            </li>
+            <li data-target="history">
+                <span>📜 Trade History & P&L</span>
+            </li>
+            <li data-target="analytics">
+                <span>🐋 Whale Analytics</span>
+            </li>
+            <li data-target="system">
+                <span>⚙️ System & Logs</span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <!-- Live Trading Desk -->
+        <div id="dashboard" class="tab-content active">
+            <div class="header-section">
+                <h1>📈 Trading Dash Board</h1>
+                <div id="mode-badge" class="badge" style="margin-top: 6px;">MODE: UNKNOWN</div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card" style="border-left-color: #3B82F6;">
+                    <div class="metric-value" id="dash-total-val">$0.00</div>
+                    <div class="metric-label">TOTAL ACCOUNT VALUE</div>
+                </div>
+                <div class="metric-card" style="border-left-color: #8B5CF6;">
+                    <div class="metric-value" id="dash-cash">$0.00</div>
+                    <div class="metric-label">AVAILABLE CASH</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="dash-net-pnl">$0.00</div>
+                    <div class="metric-label">NET PROFIT (ALL TIME)</div>
+                </div>
+                <div class="metric-card" style="border-left-color: #F59E0B;">
+                    <div class="metric-value" id="dash-active-trades">0 / 0</div>
+                    <div class="metric-label">ACTIVE TRADES</div>
+                </div>
+            </div>
+
+            <div id="live-trades-container">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Trade History & P&L -->
+        <div id="history" class="tab-content">
+            <div class="header-section">
+                <h1>📜 Trade History & P&L</h1>
+                <p>Historical record of all completed trades executed by the bot.</p>
+                
+                <div class="filter-group">
+                    <label>Filter Mode:</label>
+                    <select id="history-filter">
+                        <option value="ALL">ALL</option>
+                        <option value="LIVE">LIVE</option>
+                        <option value="PAPER">PAPER</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card" style="border-left-color: #3B82F6;">
+                    <div class="metric-value" id="hist-total-trades">0</div>
+                    <div class="metric-label">TOTAL TRADES EXECUTED</div>
+                </div>
+                <div class="metric-card" style="border-left-color: #F59E0B;">
+                    <div class="metric-value" id="hist-win-rate">0.0%</div>
+                    <div class="metric-label">OVERALL WIN RATE</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="hist-realized-pnl">$0.00</div>
+                    <div class="metric-label">REALIZED PROFIT</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="hist-avg-pnl">$0.00</div>
+                    <div class="metric-label">AVG PROFIT / TRADE</div>
+                </div>
+
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Entry Time (UTC)</th>
+                            <th>Mode</th>
+                            <th>Token</th>
+                            <th>Whale</th>
+                            <th>Trade Size</th>
+                            <th>Entry / Exit Price</th>
+                            <th>Duration</th>
+                            <th>Exit Reason</th>
+                            <th>Net P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Whale Analytics -->
+        <div id="analytics" class="tab-content">
+            <div class="header-section">
+                <h1>🐋 Whale Database & Analytics</h1>
+                <p>Performance tracking and roster for all monitored wallets.</p>
+
+                <div class="filter-group">
+                    <label>Analyze trades from:</label>
+                    <select id="analytics-filter">
+                        <option value="ALL">ALL</option>
+                        <option value="LIVE">LIVE</option>
+                        <option value="PAPER">PAPER</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card" style="border-left-color: #3B82F6;">
+                    <div class="metric-value" id="whale-total-db">0</div>
+                    <div class="metric-label">Total Whales in DB</div>
+                </div>
+                <div class="metric-card" style="border-left-color: #10B981;">
+                    <div class="metric-value" id="whale-whitelists">0</div>
+                    <div class="metric-label">Active Whitelists</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Wallet Address</th>
+                            <th>Status</th>
+                            <th>Win Rate</th>
+                            <th>Trades Executed</th>
+                            <th>Total P&L Generated</th>
+                            <th class="modes-col">Modes Traded</th>
+                        </tr>
+                    </thead>
+                    <tbody id="whale-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- System & Logs -->
+        <div id="system" class="tab-content">
+            <div class="header-section">
+                <h1>⚙️ System & Logs</h1>
+                <p>Bot configuration parameters and real-time execution logs.</p>
+            </div>
+            
+            <div class="config-viewer" id="env-viewer">
+                <!-- Env logic -->
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 2rem; margin-bottom: 1rem;">
+                <h3 style="color: var(--text-main); margin: 0;">Live Scanner Logs</h3>
+                <div class="log-controls" style="margin: 0; display: flex; gap: 10px;">
+                    <button id="refresh-logs-btn" class="btn">🔄 Refresh Logs</button>
+                    <a href="/api/download/bot_debug.log" class="btn" style="text-decoration: none;" download>⬇️ Download bot_debug.log</a>
+                </div>
+            </div>
+            
+            <div class="log-viewer" id="log-viewer">
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+
+

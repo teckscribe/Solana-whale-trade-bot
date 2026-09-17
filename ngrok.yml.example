@@ -1,0 +1,7 @@
+version: "2"
+authtoken: "YOUR_NGROK_AUTHTOKEN_HERE"
+
+tunnels:
+  wtb_dashboard:
+    proto: http
+    addr: 8101
