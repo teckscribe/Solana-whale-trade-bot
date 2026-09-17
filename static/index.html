@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=4.0">
+    <link rel="stylesheet" href="/static/style.css?v=4.3">
 </head>
 <body>
     <!-- Top Global App Bar -->
@@ -170,12 +170,18 @@
 
             <!-- Active Positions Section -->
             <div class="content-card">
-                <div class="card-header">
+                <div class="card-header flex-wrap">
                     <div class="card-title-group">
                         <h2 class="card-title">Active Copy-Trade Positions</h2>
                         <span class="card-caption">Currently open tokens tracked with automated trailing stops</span>
                     </div>
-                    <span id="active-positions-badge" class="count-pill">0 Open</span>
+                    <div class="header-actions-group">
+                        <div class="view-toggle-group">
+                            <button id="pos-view-cards-btn" class="btn-view-toggle active" title="Compact Cards View" aria-label="Compact Cards View">🎴 Cards</button>
+                            <button id="pos-view-table-btn" class="btn-view-toggle" title="Compact Table View" aria-label="Compact Table View">📋 Table</button>
+                        </div>
+                        <span id="active-positions-badge" class="count-pill">0 Open</span>
+                    </div>
                 </div>
 
                 <div id="live-trades-container" class="card-body">
@@ -550,6 +556,6 @@
     <!-- Toast Notification Banner -->
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=4.2"></script>
+    <script src="/static/app.js?v=4.3"></script>
 </body>
 </html>

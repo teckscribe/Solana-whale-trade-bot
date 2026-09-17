@@ -214,9 +214,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let currentActiveTrades = [];
+    let positionsViewMode = localStorage.getItem('wtb_pos_view') || 'cards';
+
+    const posViewCardsBtn = document.getElementById('pos-view-cards-btn');
+    const posViewTableBtn = document.getElementById('pos-view-table-btn');
+
+    function updatePosViewButtons() {
+        if (posViewCardsBtn) posViewCardsBtn.classList.toggle('active', positionsViewMode === 'cards');
+        if (posViewTableBtn) posViewTableBtn.classList.toggle('active', positionsViewMode === 'table');
+    }
+    updatePosViewButtons();
+
+    if (posViewCardsBtn) {
+        posViewCardsBtn.addEventListener('click', () => {
+            positionsViewMode = 'cards';
+            localStorage.setItem('wtb_pos_view', 'cards');
+            updatePosViewButtons();
+            renderActivePositions(currentActiveTrades);
+        });
+    }
+
+    if (posViewTableBtn) {
+        posViewTableBtn.addEventListener('click', () => {
+            positionsViewMode = 'table';
+            localStorage.setItem('wtb_pos_view', 'table');
+            updatePosViewButtons();
+            renderActivePositions(currentActiveTrades);
+        });
+    }
+
+    function formatPrice(p) {
+        const price = parseFloat(p || 0);
+        if (price === 0) return '0.00';
+        if (price >= 100) return price.toFixed(2);
+        if (price >= 1) return price.toFixed(4);
+        if (price >= 0.001) return price.toFixed(6);
+        return price.toFixed(8);
+    }
+
     function renderActivePositions(trades) {
         const container = document.getElementById('live-trades-container');
         if (!container) return;
+
+        currentActiveTrades = trades || [];
 
         if (!trades || trades.length === 0) {
             container.innerHTML = `
@@ -229,17 +270,94 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (positionsViewMode === 'table') {
+            // High-Density Compact Table View for multi-trade efficiency
+            let html = `
+                <div class="table-responsive">
+                    <table class="terminal-table table-dense">
+                        <thead>
+                            <tr>
+                                <th>Token</th>
+                                <th>Copied Whale</th>
+                                <th>Entry Price</th>
+                                <th>Current Price</th>
+                                <th>Position Size</th>
+                                <th>Net Return</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            trades.forEach(t => {
+                const symbol = t.symbol || t.token_symbol || 'TOKEN';
+                const mint = t.mint || t.token_mint || t.token_address || t.token || '';
+                const whale = t.whale_wallet || t.whale || '';
+                const entryPrice = parseFloat(t.entry_price || t.entry_usd_price || 0);
+                const currentPrice = parseFloat(t.current_price || entryPrice);
+                const sizeUSD = parseFloat(t.trade_size || t.trade_size_usd || 0);
+
+                let pnlUSD = parseFloat(t.profit_usd || t.net_profit_usd || 0);
+                let pnlPct = parseFloat(t.profit_pct || t.net_profit_percent || 0);
+                if (pnlUSD === 0 && entryPrice > 0 && currentPrice > 0) {
+                    pnlPct = ((currentPrice - entryPrice) / entryPrice) * 100;
+                    pnlUSD = (pnlPct / 100) * sizeUSD;
+                }
+
+                const isProfitable = pnlUSD >= 0;
+                const pnlClass = isProfitable ? 'positive' : 'negative';
+                const sign = isProfitable ? '+' : '';
+
+                html += `
+                    <tr>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="token-icon-box" style="width: 24px; height: 24px; font-size: 0.75rem;">⚡</div>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 0.88rem;">${symbol}</div>
+                                    <span class="copy-address-mini" onclick="copyAddress('${mint}')" title="Copy mint">
+                                        ${formatShortAddr(mint)} <span class="copy-btn-nano">📋</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="copy-address-mini" onclick="copyAddress('${whale}')" title="Copy whale">
+                                ${formatShortAddr(whale)} <span class="copy-btn-nano">📋</span>
+                            </span>
+                        </td>
+                        <td class="mono-font">$${formatPrice(entryPrice)}</td>
+                        <td class="mono-font">$${formatPrice(currentPrice)}</td>
+                        <td class="mono-font">${formatUSD(sizeUSD)}</td>
+                        <td>
+                            <span class="badge-pnl ${pnlClass}">
+                                ${sign}${formatUSD(pnlUSD)} (${sign}${pnlPct.toFixed(2)}%)
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            container.innerHTML = html;
+            return;
+        }
+
+        // Ultra-Compact Cards View (multi-column, bounded width, no external buttons)
         let html = '<div class="positions-grid">';
         trades.forEach(t => {
             const symbol = t.symbol || t.token_symbol || 'TOKEN';
-            const mint = t.mint || t.token_mint || '';
+            const mint = t.mint || t.token_mint || t.token_address || t.token || '';
             const whale = t.whale_wallet || t.whale || '';
-            const entryPrice = parseFloat(t.entry_price || 0);
+            const entryPrice = parseFloat(t.entry_price || t.entry_usd_price || 0);
             const currentPrice = parseFloat(t.current_price || entryPrice);
             const sizeUSD = parseFloat(t.trade_size || t.trade_size_usd || 0);
-            
-            let pnlUSD = parseFloat(t.profit_usd || 0);
-            let pnlPct = parseFloat(t.profit_pct || 0);
+
+            let pnlUSD = parseFloat(t.profit_usd || t.net_profit_usd || 0);
+            let pnlPct = parseFloat(t.profit_pct || t.net_profit_percent || 0);
             if (pnlUSD === 0 && entryPrice > 0 && currentPrice > 0) {
                 pnlPct = ((currentPrice - entryPrice) / entryPrice) * 100;
                 pnlUSD = (pnlPct / 100) * sizeUSD;
@@ -256,50 +374,38 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="token-icon-box">⚡</div>
                             <div>
                                 <div class="position-token-name">${symbol}</div>
-                                <span class="copy-address" onclick="copyAddress('${mint}')" title="Click to copy mint address">
-                                    ${formatShortAddr(mint)} <span class="copy-btn-mini">📋</span>
+                                <span class="copy-address-mini" onclick="copyAddress('${mint}')" title="Copy mint address">
+                                    ${formatShortAddr(mint)} <span class="copy-btn-nano">📋</span>
                                 </span>
                             </div>
                         </div>
                         <span class="badge-pnl ${pnlClass}">${sign}${pnlPct.toFixed(2)}%</span>
                     </div>
 
-                    <div class="position-meta-row">
-                        <span class="meta-name">Copied Whale</span>
-                        <span class="copy-address" onclick="copyAddress('${whale}')" title="Click to copy whale address">
-                            ${formatShortAddr(whale)} <span class="copy-btn-mini">📋</span>
+                    <div class="pos-whale-row">
+                        <span class="pos-whale-label">Whale</span>
+                        <span class="copy-address-mini" onclick="copyAddress('${whale}')" title="Copy whale address">
+                            ${formatShortAddr(whale)} <span class="copy-btn-nano">📋</span>
                         </span>
                     </div>
 
-                    <div class="position-meta-row">
-                        <span class="meta-name">Entry Price</span>
-                        <span class="meta-val">$${entryPrice > 1 ? entryPrice.toFixed(4) : entryPrice.toFixed(6)}</span>
-                    </div>
-
-                    <div class="position-meta-row">
-                        <span class="meta-name">Current Price</span>
-                        <span class="meta-val">$${currentPrice > 1 ? currentPrice.toFixed(4) : currentPrice.toFixed(6)}</span>
-                    </div>
-
-                    <div class="position-meta-row">
-                        <span class="meta-name">Position Size</span>
-                        <span class="meta-val">${formatUSD(sizeUSD)}</span>
-                    </div>
-
-                    <div class="position-pnl-row">
-                        <span class="meta-name">Net Return</span>
-                        <span class="badge-pnl ${pnlClass}" style="font-size: 0.9rem;">
-                            ${sign}${formatUSD(pnlUSD)} (${sign}${pnlPct.toFixed(2)}%)
-                        </span>
-                    </div>
-
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <a href="https://solscan.io/token/${mint}" target="_blank" rel="noopener" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 0.75rem;">
-                            Solscan ↗
-                        </a>
-                        <a href="https://dexscreener.com/solana/${mint}" target="_blank" rel="noopener" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 0.75rem;">
-                            DexScreener ↗
-                        </a>
+                    <div class="pos-metrics-grid">
+                        <div class="pos-metric-item">
+                            <span class="pos-m-label">Entry</span>
+                            <span class="pos-m-val">$${formatPrice(entryPrice)}</span>
+                        </div>
+                        <div class="pos-metric-item">
+                            <span class="pos-m-label">Current</span>
+                            <span class="pos-m-val">$${formatPrice(currentPrice)}</span>
+                        </div>
+                        <div class="pos-metric-item">
+                            <span class="pos-m-label">Size</span>
+                            <span class="pos-m-val">${formatUSD(sizeUSD)}</span>
+                        </div>
+                        <div class="pos-metric-item">
+                            <span class="pos-m-label">Net Return</span>
+                            <span class="pos-m-val ${pnlClass}">${sign}${formatUSD(pnlUSD)}</span>
+                        </div>
                     </div>
                 </div>
             `;
