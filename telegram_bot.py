@@ -806,11 +806,14 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             else:
                 status_target = "WHITELIST"
             import subprocess
-            subprocess.Popen(["python", "interactive_scan.py", status_target])
+            import sys
+            subprocess.Popen([sys.executable, "interactive_scan.py", status_target])
             await query.answer(f"Scanning {status_target} whales...", show_alert=True)
             await query.edit_message_text(
-                f"⏳ Scanning all {status_target} whales (1d, 7d, 30d).\n\n"
-                f"Because this checks 3 timeframes for dozens of wallets, it will take ~10 minutes due to API limits. You will receive a new message with the top 10 results when finished.",
+                f"⏳ <b>Scanning {status_target} Whales...</b>\n\n"
+                f"Evaluating active candidates using 2-tier GMGN performance analysis.\n"
+                f"You will receive interactive messages with the Top 30 Alpha performers and instant whitelist buttons as results arrive.",
+                parse_mode="HTML",
                 reply_markup=_whale_management_keyboard()
             )
 
