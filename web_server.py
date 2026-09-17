@@ -30,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from typing import Dict, Any, Optional
 
+from datetime import datetime, timezone
 from jupiter_api import get_sol_price_usd
 import settings_manager
 
@@ -469,6 +470,81 @@ def _read_redacted(path: str) -> str:
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         return _redact_secrets(f.read())
 
+
+@app.get("/api/settings")
+async def get_all_settings(_: bool = Depends(require_auth)):
+    """Returns all hot-reloadable settings and their specifications."""
+    return {
+        "settings": settings_manager.get_all(),
+        "spec": settings_manager.SPEC
+    }
+
+@app.post("/api/settings")
+async def update_setting(request: Request, _: bool = Depends(require_auth)):
+    """Updates a hot-reloadable configuration setting."""
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        
+    key = data.get("key")
+    val = data.get("value")
+    if not key:
+        raise HTTPException(status_code=400, detail="Missing 'key' in payload")
+        
+    success, msg = settings_manager.update(str(key), val, source="web_dashboard")
+    if not success:
+        return JSONResponse({"success": False, "message": msg}, status_code=400)
+    
+    return {
+        "success": True,
+        "message": msg,
+        "key": key,
+        "current_value": settings_manager.get(key)
+    }
+
+@app.get("/api/telemetry")
+async def get_telemetry(_: bool = Depends(require_auth)):
+    """Returns rate budget statistics and transaction decode telemetry."""
+    try:
+        from connection_pool import get_stats as get_pool_stats
+        pool_stats = get_pool_stats()
+    except Exception:
+        pool_stats = {}
+
+    try:
+        from decoder import get_decode_stats
+        decode_stats = get_decode_stats()
+    except Exception:
+        decode_stats = {}
+
+    return {
+        "budgets": pool_stats,
+        "decoder": decode_stats
+    }
+
+@app.get("/api/log-info")
+async def get_log_info(_: bool = Depends(require_auth)):
+    """Returns file metadata for bot_debug.log without streaming the full file content."""
+    log_path = os.path.join(BASE_DIR, "bot_debug.log")
+    if os.path.exists(log_path):
+        stat = os.stat(log_path)
+        size_mb = round(stat.st_size / (1024 * 1024), 2)
+        mod_time = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return {
+            "exists": True,
+            "filename": "bot_debug.log",
+            "size_mb": size_mb,
+            "bytes": stat.st_size,
+            "modified": mod_time
+        }
+    return {
+        "exists": False,
+        "filename": "bot_debug.log",
+        "size_mb": 0.0,
+        "bytes": 0,
+        "modified": "Never"
+    }
 
 @app.get("/api/download/{filename}")
 async def download_log(filename: str, _: bool = Depends(require_auth)):
