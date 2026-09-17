@@ -15,6 +15,7 @@ Credentials loaded from .env:
 import os
 import logging
 import asyncio
+import random
 from dotenv import load_dotenv
 from solana.rpc.async_api import AsyncClient
 from solders.signature import Signature
@@ -24,13 +25,34 @@ log = logging.getLogger("WhaleDecoder")
 
 RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 
-from connection_pool import get_rpc_client
+from connection_pool import get_rpc_client, create_fallback_rpc_client
 
 SOL_MINT = "So11111111111111111111111111111111111111112"
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 
-# Global semaphore to strictly limit concurrent RPC requests across all parallel decoding tasks
-_rpc_semaphore = asyncio.Semaphore(2)
+# ---------------------------------------------------------------------------
+# Decode Metrics (exposed via web_server /api/stats)
+# ---------------------------------------------------------------------------
+_decode_stats = {
+    "total_attempts": 0,
+    "success": 0,
+    "failed_after_retries": 0,
+    "fallback_success": 0,
+    "fallback_attempts": 0,
+}
+
+def get_decode_stats() -> dict:
+    """Return a copy of decode metrics for dashboard display."""
+    return dict(_decode_stats)
+
+# ---------------------------------------------------------------------------
+# Retry configuration
+# ---------------------------------------------------------------------------
+MAX_RETRIES = 10
+INITIAL_SLEEP = 1.5       # seconds before first RPC attempt (WSS→RPC indexing gap)
+BASE_BACKOFF = 1.5        # exponential base
+MAX_SINGLE_WAIT = 30.0    # cap per-retry wait
+JITTER_RANGE = 0.5        # ±0.5s random jitter
 
 async def decode_transaction(signature_str: str, whale_wallet: str):
     """
@@ -38,35 +60,66 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
     what the whale bought and sold.
     """
     log.info(f"Decoding TX: {signature_str}")
+    _decode_stats["total_attempts"] += 1
     try:
         sig = Signature.from_string(signature_str)
         
-        # Initial delay because WSS is faster than public RPC indexing
-        await asyncio.sleep(3.0)
+        # Initial delay — WSS delivers notifications faster than RPC indexes them
+        await asyncio.sleep(INITIAL_SLEEP)
         
-        # Retry loop for RPC indexing delays and 429 rate limits
+        # Retry loop with exponential backoff + jitter
         response = None
         rpc_client = await get_rpc_client()
-        for attempt in range(6):
-            async with _rpc_semaphore:
-                try:
-                    response = await rpc_client.get_transaction(
-                        sig, 
-                        commitment="confirmed",
-                        max_supported_transaction_version=0
-                    )
-                    if response and response.value:
-                        break
-                except Exception as rpc_e:
-                    log.debug(f"RPC error on {signature_str[:8]}: {rpc_e}")
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = await rpc_client.get_transaction(
+                    sig, 
+                    commitment="confirmed",
+                    max_supported_transaction_version=0
+                )
+                if response and response.value:
+                    break
+            except Exception as rpc_e:
+                log.debug(f"RPC error on {signature_str[:10]}: {rpc_e}")
 
-            delay = 3.0 + (attempt * 2.0)
-            log.warning(f"Transaction {signature_str[:8]}... not ready or rate limited. Retrying in {delay}s... ({attempt+1}/6)")
+            # Exponential backoff: 1.5, 2.25, 3.375, 5.06, 7.59, 11.4, 17.1, 25.6, 30, 30
+            delay = min(BASE_BACKOFF ** (attempt + 1), MAX_SINGLE_WAIT)
+            delay += random.uniform(-JITTER_RANGE, JITTER_RANGE)
+            delay = max(0.5, delay)
+            log.warning(f"TX {signature_str[:10]}... not ready. Retry {attempt+1}/{MAX_RETRIES} in {delay:.1f}s")
             await asyncio.sleep(delay)
 
+        # Fallback: try the free public Solana RPC as a last resort
         if not response or not response.value:
-            log.warning(f"Transaction {signature_str} failed to confirm on RPC after 6 attempts.")
+            log.info(f"Primary RPC exhausted for {signature_str[:10]}. Trying public fallback...")
+            _decode_stats["fallback_attempts"] += 1
+            fallback_client = None
+            try:
+                fallback_client = await create_fallback_rpc_client()
+                await asyncio.sleep(2.0)  # brief pause before fallback
+                response = await fallback_client.get_transaction(
+                    sig,
+                    commitment="confirmed",
+                    max_supported_transaction_version=0
+                )
+                if response and response.value:
+                    log.info(f"Fallback RPC succeeded for {signature_str[:10]}")
+                    _decode_stats["fallback_success"] += 1
+            except Exception as fb_e:
+                log.debug(f"Fallback RPC error for {signature_str[:10]}: {fb_e}")
+            finally:
+                if fallback_client:
+                    try:
+                        await fallback_client.close()
+                    except Exception:
+                        pass
+
+        if not response or not response.value:
+            _decode_stats["failed_after_retries"] += 1
+            log.warning(f"TX {signature_str} failed after {MAX_RETRIES} retries + fallback.")
             return None
+        
+        _decode_stats["success"] += 1
             
         tx = response.value.transaction
         meta = tx.meta

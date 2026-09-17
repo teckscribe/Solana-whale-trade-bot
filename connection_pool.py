@@ -128,7 +128,7 @@ async def get_client() -> httpx.AsyncClient:
 
 _rpc_client: Optional[AsyncClient] = None
 _rpc_lock = asyncio.Lock()
-_rpc_semaphore = asyncio.Semaphore(3)
+_rpc_semaphore = asyncio.Semaphore(5)
 
 async def get_rpc_client() -> AsyncClient:
     """Get or create the shared Solana RPC client."""
@@ -160,6 +160,18 @@ async def rpc_call(coro_factory: Callable[[], Coroutine], priority: str = 'norma
             RPC_BUDGET.observe_error()
             log.error(f"RPC call failed: {e}")
             raise
+
+
+async def create_fallback_rpc_client() -> AsyncClient:
+    """
+    Create a one-shot AsyncClient pointing at the free public Solana RPC.
+    Used as emergency fallback when the primary paid endpoint (Alchemy/Helius)
+    fails to return transaction data after all retries.
+    The caller is responsible for closing this client after use.
+    """
+    if not SOLANA_INSTALLED:
+        raise ImportError("solana package is not installed.")
+    return AsyncClient("https://api.mainnet-beta.solana.com")
 
 
 # ---------------------------------------------------------------------------
