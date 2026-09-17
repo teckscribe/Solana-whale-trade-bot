@@ -1,11 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // ── Dashboard auth ──────────────────────────────────────────────────────
-    // The API now requires the WEB_AUTH_TOKEN shared secret. Open the dashboard as
-    //   https://<host>/?token=<WEB_AUTH_TOKEN>
-    // The token is kept in sessionStorage so it survives in-page navigation, and stripped
-    // from the visible URL so it isn't left sitting in the address bar or copied into
-    // a screenshot.
+    // ── Dashboard Auth ──────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     if (urlToken) {
@@ -23,19 +18,53 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (res.status === 401 || res.status === 503) {
             const banner = document.getElementById('mode-badge');
-            if (banner) banner.textContent = 'UNAUTHORIZED — append ?token=<WEB_AUTH_TOKEN>';
+            if (banner) {
+                banner.textContent = 'UNAUTHORIZED — append ?token=<WEB_AUTH_TOKEN>';
+                banner.className = 'badge badge-mode';
+                banner.style.color = 'var(--loss-red)';
+                banner.style.background = 'var(--loss-bg)';
+            }
             throw new Error(`Auth failed (${res.status})`);
         }
         return res;
     }
 
-    // Authenticate the log download link, which is a plain anchor and can't send headers.
+    // Authenticate the log download link
     const dlLink = document.querySelector('a[href^="/api/download/"]');
     if (dlLink && AUTH_TOKEN) {
         dlLink.href = `${dlLink.getAttribute('href')}?token=${encodeURIComponent(AUTH_TOKEN)}`;
     }
 
-    // Sidebar Toggle
+    // ── Theme Switcher ──────────────────────────────────────────────────────
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    const themeToggleLabel = document.getElementById('theme-toggle-label');
+    const themeTogglePill = document.getElementById('theme-toggle-pill');
+
+    function syncThemeUI(theme) {
+        if (!themeToggleLabel || !themeTogglePill) return;
+        if (theme === 'dark') {
+            themeToggleLabel.textContent = '🌙 Dark Theme';
+            themeTogglePill.textContent = 'Switch to Light';
+        } else {
+            themeToggleLabel.textContent = '☀️ Light Theme';
+            themeTogglePill.textContent = 'Switch to Dark';
+        }
+    }
+
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    syncThemeUI(currentTheme);
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const active = document.documentElement.getAttribute('data-theme') || 'light';
+            const next = active === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('wtb_theme', next);
+            syncThemeUI(next);
+        });
+    }
+
+    // ── Sidebar Controls ────────────────────────────────────────────────────
     const sidebar = document.getElementById('sidebar');
     const mobileToggle = document.getElementById('mobile-toggle');
     const desktopToggle = document.getElementById('desktop-toggle');
@@ -45,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (desktopToggle) desktopToggle.addEventListener('click', () => sidebar.classList.remove('collapsed'));
     if (sidebarClose) sidebarClose.addEventListener('click', () => sidebar.classList.add('collapsed'));
     
-    // Tab Switching Logic
+    // ── Tab Switching ───────────────────────────────────────────────────────
     const navLinks = document.querySelectorAll('.nav-links li');
     const tabContents = document.querySelectorAll('.tab-content');
 
@@ -58,15 +87,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const target = document.getElementById(link.getAttribute('data-target'));
             if(target) target.classList.add('active');
             
-            // Force immediate fetch when switching tabs for snappiness
+            // Trigger immediate fetch for snappy UI
             fetchAllData();
         });
     });
 
-    // Formatters
+    // ── Formatters ──────────────────────────────────────────────────────────
     const formatMoney = (val) => {
         const num = parseFloat(val) || 0;
-        return '$' + num.toFixed(2);
+        return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const formatPct = (val) => {
@@ -83,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const shortenAddress = (addr) => {
         if (!addr) return 'Unknown';
+        if (addr.length <= 10) return addr;
         return addr.substring(0, 6) + '...' + addr.substring(addr.length - 4);
     };
 
@@ -93,30 +123,41 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${m}m ${s}s`;
     };
 
-    // Fetch and Render Functions
+    // ── Data Fetching ───────────────────────────────────────────────────────
+
+    // 1. Live Dashboard
     async function fetchDashboard() {
         try {
             const res = await apiFetch('/api/dashboard');
             const data = await res.json();
             
-            document.getElementById('mode-badge').textContent = `MODE: ${data.mode}`;
+            const badge = document.getElementById('mode-badge');
+            badge.textContent = `MODE: ${data.mode}`;
+            badge.className = `badge badge-mode ${data.mode === 'LIVE' ? 'mode-live' : 'mode-paper'}`;
+
             document.getElementById('dash-total-val').textContent = formatMoney(data.total_value);
             document.getElementById('dash-cash').textContent = formatMoney(data.available_cash);
             
             const netPnlEl = document.getElementById('dash-net-pnl');
             netPnlEl.innerHTML = formatPnl(data.net_profit);
-            const netPnlCard = netPnlEl.closest('.metric-card');
+            const netPnlCard = document.getElementById('dash-net-pnl-card') || netPnlEl.closest('.metric-card');
             if (netPnlCard) {
-                netPnlCard.style.borderLeftColor = data.net_profit > 0 ? '#00FF94' : (data.net_profit < 0 ? '#FF3366' : '#94A3B8');
+                const accent = data.net_profit > 0 ? 'var(--profit-green)' : (data.net_profit < 0 ? 'var(--loss-red)' : 'var(--text-muted)');
+                netPnlCard.style.setProperty('--metric-accent', accent);
             }
             
             document.getElementById('dash-active-trades').textContent = `${data.active_trades_count} / ${data.max_trades}`;
 
-
-            // Render live trades (for now just a placeholder if empty, else table)
+            // Render live trades
             const container = document.getElementById('live-trades-container');
-            if(data.active_trades_count === 0) {
-                container.innerHTML = `<div style="background:var(--bg-secondary); padding:20px; border-radius:8px; border:1px solid var(--border); color:var(--text-muted);">🐋 There are currently no active trades. The bot is waiting for a whale to make a move.</div>`;
+            if (data.active_trades_count === 0) {
+                container.innerHTML = `
+                    <div class="empty-state-box">
+                        <span class="empty-state-icon">🐋</span>
+                        <div><strong>No Active Trades In Flight</strong></div>
+                        <div style="font-size: 0.8rem;">The bot is currently scanning for verified high-conviction whale moves.</div>
+                    </div>
+                `;
             } else {
                 let html = `<div class="table-container"><table class="data-table"><thead><tr><th>Token</th><th>Whale</th><th>Entry Time</th><th>Entry Price</th><th>Current Price</th><th>Size</th><th>P&L (%)</th><th>P&L ($)</th></tr></thead><tbody>`;
                 data.trades.forEach(t => {
@@ -143,8 +184,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td><span style="font-family:monospace">${shortenAddress(t.token_address || t.token)}</span></td>
                         <td><span style="font-family:monospace">${shortenAddress(t.whale_wallet || t.wallet)}</span></td>
                         <td>${entryTimeStr}</td>
-                        <td>${entry.toFixed(6)}</td>
-                        <td>${current.toFixed(6)}</td>
+                        <td style="font-family:monospace">$${entry.toFixed(6)}</td>
+                        <td style="font-family:monospace">$${current.toFixed(6)}</td>
                         <td>${formatMoney(size)}</td>
                         <td>${pctHtml}</td>
                         <td>${formatPnl(pnlUsd)}</td>
@@ -159,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // 2. Trade History
     async function fetchHistory() {
         try {
             const mode = document.getElementById('history-filter').value;
@@ -170,43 +212,52 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const histPnlEl = document.getElementById('hist-realized-pnl');
             histPnlEl.innerHTML = formatPnl(data.realized_profit);
-            const histPnlCard = histPnlEl.closest('.metric-card');
+            const histPnlCard = document.getElementById('hist-realized-pnl-card') || histPnlEl.closest('.metric-card');
             if (histPnlCard) {
-                histPnlCard.style.borderLeftColor = data.realized_profit > 0 ? '#00FF94' : (data.realized_profit < 0 ? '#FF3366' : '#94A3B8');
+                const accent = data.realized_profit > 0 ? 'var(--profit-green)' : (data.realized_profit < 0 ? 'var(--loss-red)' : 'var(--text-muted)');
+                histPnlCard.style.setProperty('--metric-accent', accent);
             }
 
             const histAvgEl = document.getElementById('hist-avg-pnl');
             histAvgEl.innerHTML = formatPnl(data.avg_profit);
-            const histAvgCard = histAvgEl.closest('.metric-card');
+            const histAvgCard = document.getElementById('hist-avg-pnl-card') || histAvgEl.closest('.metric-card');
             if (histAvgCard) {
-                histAvgCard.style.borderLeftColor = data.avg_profit > 0 ? '#00FF94' : (data.avg_profit < 0 ? '#FF3366' : '#94A3B8');
+                const accent = data.avg_profit > 0 ? 'var(--profit-green)' : (data.avg_profit < 0 ? 'var(--loss-red)' : 'var(--text-muted)');
+                histAvgCard.style.setProperty('--metric-accent', accent);
             }
-
 
             const tbody = document.getElementById('history-tbody');
             let html = '';
             data.trades.forEach(t => {
                 const pnl = t.real_net_profit_usd || t.net_profit_usd || 0;
-                let modeColor = t.trade_mode === 'LIVE' ? 'color: var(--emerald);' : 'color: var(--amber);';
+                const isLive = String(t.trade_mode).toUpperCase() === 'LIVE';
+                const modeClass = isLive ? 'status-live' : 'status-paper';
+                
+                const reasonUpper = String(t.exit_reason || '').toUpperCase();
+                let reasonClass = 'status-neutral';
+                if (reasonUpper.includes('PROFIT') || reasonUpper.includes('TP')) reasonClass = 'status-whitelist';
+                else if (reasonUpper.includes('STOP') || reasonUpper.includes('SL')) reasonClass = 'status-blacklist';
+
                 html += `<tr>
                     <td>${new Date(t.timestamp_entry).toLocaleString()}</td>
-                    <td><b style="${modeColor}">${t.trade_mode || 'UNKNOWN'}</b></td>
-                    <td><span style="font-family:monospace">${shortenAddress(t.token_address || t.token)}</span></td>
-                    <td><span style="font-family:monospace">${shortenAddress(t.whale_wallet || t.wallet)}</span></td>
+                    <td><span class="pill-status ${modeClass}">${t.trade_mode || 'UNKNOWN'}</span></td>
+                    <td><span style="font-family:monospace" title="${t.token_address || t.token}">${shortenAddress(t.token_address || t.token)}</span></td>
+                    <td><span style="font-family:monospace" title="${t.whale_wallet || t.wallet}">${shortenAddress(t.whale_wallet || t.wallet)}</span></td>
                     <td>${formatMoney(t.trade_size_usd)}</td>
-                    <td>${(t.entry_usd_price||0).toFixed(6)} / ${(t.exit_usd_price||0).toFixed(6)}</td>
+                    <td style="font-family:monospace">${(t.entry_usd_price||0).toFixed(6)} / ${(t.exit_usd_price||0).toFixed(6)}</td>
                     <td>${formatDuration(t.hold_duration_seconds || t.duration_seconds)}</td>
-                    <td><b>${t.exit_reason || 'CLOSED'}</b></td>
+                    <td><span class="pill-status ${reasonClass}">${t.exit_reason || 'CLOSED'}</span></td>
                     <td>${formatPnl(pnl)}</td>
                 </tr>`;
             });
-            tbody.innerHTML = html || `<tr><td colspan="8" style="text-align:center;">No trades found.</td></tr>`;
+            tbody.innerHTML = html || `<tr><td colspan="9" style="text-align:center; padding: 24px; color: var(--text-muted);">No historical trades found for this filter.</td></tr>`;
 
         } catch (e) {
             console.error(e);
         }
     }
 
+    // 3. Whale Analytics
     async function fetchWhales() {
         try {
             const mode = document.getElementById('analytics-filter').value;
@@ -219,34 +270,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const tbody = document.getElementById('whale-tbody');
             const modesCol = document.querySelector('.modes-col');
             
-            if (mode === 'ALL') {
-                modesCol.style.display = 'table-cell';
-            } else {
-                modesCol.style.display = 'none';
+            if (modesCol) {
+                modesCol.style.display = mode === 'ALL' ? 'table-cell' : 'none';
             }
 
             let html = '';
             data.whales.forEach(w => {
-                let statusColor = '';
-                if(w.status === 'WHITELIST') statusColor = 'color: var(--emerald)';
-                else if(w.status === 'BLACKLIST') statusColor = 'color: var(--red)';
+                let pillClass = 'status-neutral';
+                if (w.status === 'WHITELIST') pillClass = 'status-whitelist';
+                else if (w.status === 'BLACKLIST') pillClass = 'status-blacklist';
 
                 html += `<tr>
                     <td><span style="font-family:monospace" title="${w.wallet}">${shortenAddress(w.wallet)}</span></td>
-                    <td><b style="${statusColor}">${w.status}</b></td>
-                    <td>${formatPct(w.win_rate)}</td>
+                    <td><span class="pill-status ${pillClass}">${w.status}</span></td>
+                    <td><strong>${formatPct(w.win_rate)}</strong></td>
                     <td>${w.total}</td>
                     <td>${formatPnl(w.profit)}</td>
                     ${mode === 'ALL' ? `<td>${w.modes}</td>` : ''}
                 </tr>`;
             });
-            tbody.innerHTML = html || `<tr><td colspan="6" style="text-align:center;">No whales tracked yet.</td></tr>`;
+            tbody.innerHTML = html || `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-muted);">No whales found in this category.</td></tr>`;
 
         } catch (e) {
             console.error(e);
         }
     }
 
+    // 4. System & Logs
     async function fetchLogs() {
         try {
             const res = await apiFetch('/api/logs');
@@ -262,7 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const logViewer = document.getElementById('log-viewer');
             logViewer.textContent = data.logs || "No logs available.";
-            // scroll to bottom smoothly
             logViewer.scrollTop = logViewer.scrollHeight;
 
         } catch (e) {
@@ -270,12 +319,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Refresh controls
-    document.getElementById('history-filter').addEventListener('change', fetchHistory);
-    document.getElementById('analytics-filter').addEventListener('change', fetchWhales);
-    document.getElementById('refresh-logs-btn').addEventListener('click', fetchLogs);
+    // ── Event Handlers ──────────────────────────────────────────────────────
+    const histFilter = document.getElementById('history-filter');
+    const analyticsFilter = document.getElementById('analytics-filter');
+    const refreshLogsBtn = document.getElementById('refresh-logs-btn');
 
-    // Global fetch
+    if (histFilter) histFilter.addEventListener('change', fetchHistory);
+    if (analyticsFilter) analyticsFilter.addEventListener('change', fetchWhales);
+    if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', fetchLogs);
+
+    // Initial Load
     const fetchAllData = () => {
         fetchDashboard();
         fetchHistory();
@@ -283,18 +336,17 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchLogs();
     };
 
-    // Init
     fetchAllData();
 
-    // Auto-refresh every 5 seconds (only the active tab to save bandwidth)
+    // Auto-refresh active tab every 5s
     setInterval(() => {
-        const activeTab = document.querySelector('.tab-content.active').id;
-        if(activeTab === 'dashboard') fetchDashboard();
-        else if(activeTab === 'history') fetchHistory();
-        else if(activeTab === 'analytics') fetchWhales();
-        else if(activeTab === 'system') fetchLogs(); // auto refresh logs too
+        const activeTabEl = document.querySelector('.tab-content.active');
+        if (!activeTabEl) return;
+        const activeTab = activeTabEl.id;
+        if (activeTab === 'dashboard') fetchDashboard();
+        else if (activeTab === 'history') fetchHistory();
+        else if (activeTab === 'analytics') fetchWhales();
+        else if (activeTab === 'system') fetchLogs();
     }, 5000);
 
 });
-
-

@@ -1,110 +1,184 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Whale Terminal</title>
+    <title>Solana Whale Terminal — Live Dashboard</title>
+    <!-- FOUC Prevention Script -->
+    <script>
+        try {
+            const savedTheme = localStorage.getItem('wtb_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="bg-orb"></div>
-    <button id="desktop-toggle" class="desktop-toggle">☰</button>
+    <div class="bg-grid-pattern"></div>
+    <button id="desktop-toggle" class="desktop-toggle" title="Toggle Navigation">☰</button>
     
     <div class="mobile-header">
-        <h2 class="brand">🐋 Solana Whale Trading Bot</h2>
+        <div class="brand-title">
+            <span class="brand-icon">🐋</span>
+            <span class="brand-name">WhaleBot Terminal</span>
+        </div>
         <button id="mobile-toggle" class="sidebar-toggle">☰</button>
     </div>
     
     <div class="sidebar" id="sidebar">
-        <div class="desktop-brand" style="display: flex; justify-content: space-between; align-items: center; padding: 0 20px 20px 20px; border-bottom: 1px solid var(--border-glass); margin-bottom: 25px;">
-            <h2 class="brand" style="margin: 0; padding: 0; border: none;">🐋 Whale Bot</h2>
-            <button id="sidebar-close" class="sidebar-toggle" style="font-size: 1.2rem; padding: 5px;">✖</button>
+        <div>
+            <div class="desktop-brand">
+                <div class="brand-wrapper">
+                    <div class="brand-title">
+                        <span class="brand-icon">🐋</span>
+                        <div class="brand-text-block">
+                            <span class="brand-name">WhaleBot</span>
+                            <span class="brand-sub">Solana Copy-Trader</span>
+                        </div>
+                    </div>
+                    <button id="sidebar-close" class="sidebar-toggle" title="Close Sidebar" style="font-size: 0.9rem; padding: 4px 8px;">✕</button>
+                </div>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-target="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span>Live Trading Desk</span>
+                </li>
+                <li data-target="history">
+                    <span class="nav-icon">📜</span>
+                    <span>Trade History & P&L</span>
+                </li>
+                <li data-target="analytics">
+                    <span class="nav-icon">🐋</span>
+                    <span>Whale Analytics</span>
+                </li>
+                <li data-target="system">
+                    <span class="nav-icon">⚙️</span>
+                    <span>System & Logs</span>
+                </li>
+            </ul>
         </div>
-        <ul class="nav-links">
-            <li class="active" data-target="dashboard">
-                <span>📈 Trading Dash Board</span>
-            </li>
-            <li data-target="history">
-                <span>📜 Trade History & P&L</span>
-            </li>
-            <li data-target="analytics">
-                <span>🐋 Whale Analytics</span>
-            </li>
-            <li data-target="system">
-                <span>⚙️ System & Logs</span>
-            </li>
-        </ul>
+
+        <div class="sidebar-footer">
+            <button id="theme-toggle-btn" class="theme-toggle-btn" title="Switch Theme">
+                <span id="theme-toggle-label">☀️ Light Theme</span>
+                <span id="theme-toggle-pill" class="theme-switch-pill">Toggle</span>
+            </button>
+            <div class="system-status-indicator">
+                <div class="pulse-dot"></div>
+                <span>Engine Active</span>
+            </div>
+        </div>
     </div>
 
     <div class="main-content">
-        <!-- Live Trading Desk -->
+        <!-- Live Trading Desk Tab -->
         <div id="dashboard" class="tab-content active">
             <div class="header-section">
-                <h1>📈 Trading Dash Board</h1>
-                <div id="mode-badge" class="badge" style="margin-top: 6px;">MODE: UNKNOWN</div>
+                <div class="header-title-block">
+                    <h1>Live Trading Desk</h1>
+                    <p>Real-time telemetry, portfolio valuations, and active copy-trade positions.</p>
+                </div>
+                <div class="header-actions">
+                    <div id="mode-badge" class="badge badge-mode">MODE: LOADING...</div>
+                </div>
             </div>
 
             <div class="metrics-grid">
-                <div class="metric-card" style="border-left-color: #3B82F6;">
+                <div class="metric-card" style="--metric-accent: #3B82F6;">
+                    <div class="metric-header">
+                        <span class="metric-label">Account Value</span>
+                        <span class="metric-icon-badge">💼</span>
+                    </div>
                     <div class="metric-value" id="dash-total-val">$0.00</div>
-                    <div class="metric-label">TOTAL ACCOUNT VALUE</div>
+                    <span class="metric-subtext">Cash + Open Positions</span>
                 </div>
-                <div class="metric-card" style="border-left-color: #8B5CF6;">
+                <div class="metric-card" style="--metric-accent: #6366F1;">
+                    <div class="metric-header">
+                        <span class="metric-label">Available Cash</span>
+                        <span class="metric-icon-badge">💵</span>
+                    </div>
                     <div class="metric-value" id="dash-cash">$0.00</div>
-                    <div class="metric-label">AVAILABLE CASH</div>
+                    <span class="metric-subtext">Unallocated Reserve</span>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" id="dash-net-pnl-card" style="--metric-accent: #10B981;">
+                    <div class="metric-header">
+                        <span class="metric-label">Net Profit (All Time)</span>
+                        <span class="metric-icon-badge">📈</span>
+                    </div>
                     <div class="metric-value" id="dash-net-pnl">$0.00</div>
-                    <div class="metric-label">NET PROFIT (ALL TIME)</div>
+                    <span class="metric-subtext">Realized Cumulative</span>
                 </div>
-                <div class="metric-card" style="border-left-color: #F59E0B;">
+                <div class="metric-card" style="--metric-accent: #F59E0B;">
+                    <div class="metric-header">
+                        <span class="metric-label">Active Trades</span>
+                        <span class="metric-icon-badge">⚡</span>
+                    </div>
                     <div class="metric-value" id="dash-active-trades">0 / 0</div>
-                    <div class="metric-label">ACTIVE TRADES</div>
+                    <span class="metric-subtext">Open / Capacity</span>
                 </div>
             </div>
 
             <div id="live-trades-container">
-                <!-- Dynamically populated -->
+                <!-- Dynamically populated via app.js -->
             </div>
         </div>
 
-        <!-- Trade History & P&L -->
+        <!-- Trade History & P&L Tab -->
         <div id="history" class="tab-content">
             <div class="header-section">
-                <h1>📜 Trade History & P&L</h1>
-                <p>Historical record of all completed trades executed by the bot.</p>
-                
-                <div class="filter-group">
-                    <label>Filter Mode:</label>
-                    <select id="history-filter">
-                        <option value="ALL">ALL</option>
-                        <option value="LIVE">LIVE</option>
-                        <option value="PAPER">PAPER</option>
-                    </select>
+                <div class="header-title-block">
+                    <h1>Trade History & P&L</h1>
+                    <p>Complete historical ledger of closed positions with verified net returns.</p>
+                </div>
+                <div class="header-actions">
+                    <div class="filter-group">
+                        <label for="history-filter">Filter:</label>
+                        <select id="history-filter">
+                            <option value="ALL">ALL TRADES</option>
+                            <option value="LIVE">LIVE TRADES</option>
+                            <option value="PAPER">PAPER TRADES</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
             <div class="metrics-grid">
-                <div class="metric-card" style="border-left-color: #3B82F6;">
+                <div class="metric-card" style="--metric-accent: #3B82F6;">
+                    <div class="metric-header">
+                        <span class="metric-label">Total Executed</span>
+                        <span class="metric-icon-badge">🎯</span>
+                    </div>
                     <div class="metric-value" id="hist-total-trades">0</div>
-                    <div class="metric-label">TOTAL TRADES EXECUTED</div>
+                    <span class="metric-subtext">Completed Trades</span>
                 </div>
-                <div class="metric-card" style="border-left-color: #F59E0B;">
+                <div class="metric-card" style="--metric-accent: #F59E0B;">
+                    <div class="metric-header">
+                        <span class="metric-label">Win Rate</span>
+                        <span class="metric-icon-badge">🏆</span>
+                    </div>
                     <div class="metric-value" id="hist-win-rate">0.0%</div>
-                    <div class="metric-label">OVERALL WIN RATE</div>
+                    <span class="metric-subtext">Profitable Exit Share</span>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" id="hist-realized-pnl-card" style="--metric-accent: #10B981;">
+                    <div class="metric-header">
+                        <span class="metric-label">Realized Profit</span>
+                        <span class="metric-icon-badge">💰</span>
+                    </div>
                     <div class="metric-value" id="hist-realized-pnl">$0.00</div>
-                    <div class="metric-label">REALIZED PROFIT</div>
+                    <span class="metric-subtext">Net Closed Dollar P&L</span>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" id="hist-avg-pnl-card" style="--metric-accent: #8B5CF6;">
+                    <div class="metric-header">
+                        <span class="metric-label">Avg Profit / Trade</span>
+                        <span class="metric-icon-badge">📊</span>
+                    </div>
                     <div class="metric-value" id="hist-avg-pnl">$0.00</div>
-                    <div class="metric-label">AVG PROFIT / TRADE</div>
+                    <span class="metric-subtext">Per-trade Expectancy</span>
                 </div>
-
             </div>
 
             <div class="table-container">
@@ -128,30 +202,41 @@
             </div>
         </div>
 
-        <!-- Whale Analytics -->
+        <!-- Whale Analytics Tab -->
         <div id="analytics" class="tab-content">
             <div class="header-section">
-                <h1>🐋 Whale Database & Analytics</h1>
-                <p>Performance tracking and roster for all monitored wallets.</p>
-
-                <div class="filter-group">
-                    <label>Analyze trades from:</label>
-                    <select id="analytics-filter">
-                        <option value="ALL">ALL</option>
-                        <option value="LIVE">LIVE</option>
-                        <option value="PAPER">PAPER</option>
-                    </select>
+                <div class="header-title-block">
+                    <h1>Whale Database & Analytics</h1>
+                    <p>Performance profiles and win rate roster for all tracked smart money wallets.</p>
+                </div>
+                <div class="header-actions">
+                    <div class="filter-group">
+                        <label for="analytics-filter">Source:</label>
+                        <select id="analytics-filter">
+                            <option value="ALL">ALL TRADES</option>
+                            <option value="LIVE">LIVE TRADES</option>
+                            <option value="PAPER">PAPER TRADES</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div class="metrics-grid">
-                <div class="metric-card" style="border-left-color: #3B82F6;">
+            <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+                <div class="metric-card" style="--metric-accent: #3B82F6;">
+                    <div class="metric-header">
+                        <span class="metric-label">Whales Discovered</span>
+                        <span class="metric-icon-badge">🌐</span>
+                    </div>
                     <div class="metric-value" id="whale-total-db">0</div>
-                    <div class="metric-label">Total Whales in DB</div>
+                    <span class="metric-subtext">Total Profiles in DB</span>
                 </div>
-                <div class="metric-card" style="border-left-color: #10B981;">
+                <div class="metric-card" style="--metric-accent: #10B981;">
+                    <div class="metric-header">
+                        <span class="metric-label">Active Whitelist</span>
+                        <span class="metric-icon-badge">⭐</span>
+                    </div>
                     <div class="metric-value" id="whale-whitelists">0</div>
-                    <div class="metric-label">Active Whitelists</div>
+                    <span class="metric-subtext">High-Conviction Alpha</span>
                 </div>
             </div>
 
@@ -173,26 +258,35 @@
             </div>
         </div>
 
-        <!-- System & Logs -->
+        <!-- System & Logs Tab -->
         <div id="system" class="tab-content">
             <div class="header-section">
-                <h1>⚙️ System & Logs</h1>
-                <p>Bot configuration parameters and real-time execution logs.</p>
-            </div>
-            
-            <div class="config-viewer" id="env-viewer">
-                <!-- Env logic -->
-            </div>
-            
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 2rem; margin-bottom: 1rem;">
-                <h3 style="color: var(--text-main); margin: 0;">Live Scanner Logs</h3>
-                <div class="log-controls" style="margin: 0; display: flex; gap: 10px;">
+                <div class="header-title-block">
+                    <h1>System Configuration & Logs</h1>
+                    <p>Real-time execution telemetry and hot-reloaded parameters.</p>
+                </div>
+                <div class="header-actions">
                     <button id="refresh-logs-btn" class="btn">🔄 Refresh Logs</button>
-                    <a href="/api/download/bot_debug.log" class="btn" style="text-decoration: none;" download>⬇️ Download bot_debug.log</a>
+                    <a href="/api/download/bot_debug.log" class="btn btn-primary" style="text-decoration: none;" download>⬇️ Download Logs</a>
                 </div>
             </div>
             
-            <div class="log-viewer" id="log-viewer">
+            <div class="config-viewer" id="env-viewer">
+                <!-- Environment parameters populated via app.js -->
+            </div>
+            
+            <div class="log-viewer-container">
+                <div class="log-terminal-header">
+                    <div class="terminal-dots">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                    </div>
+                    <span class="terminal-title">TERMINAL // bot_debug.log</span>
+                    <span style="font-size: 0.72rem; color: #64748B;">STREAM</span>
+                </div>
+                <div class="log-viewer" id="log-viewer">
+                </div>
             </div>
         </div>
     </div>
@@ -200,5 +294,3 @@
     <script src="/static/app.js"></script>
 </body>
 </html>
-
-
