@@ -262,48 +262,24 @@ def _analyze_trades() -> str:
                     pass
             
             # --- Wallet PnL ---
-            wallet_path = os.path.join(_BOT_DIR, wallet_filename)
             wallet_str = f" <b>Actual Wallet PnL:</b> N/A"
             try:
-                env_paper_bal = _get_env_paper_balance()
-                if os.path.exists(wallet_path):
-                    with open(wallet_path, 'r') as wf:
-                        wdata = json.load(wf)
-                    
-                    # READ-ONLY from here down.
-                    #
-                    # This block used to recompute the paper balance and WRITE it back on every
-                    # stats view, while trade_brain.record_trade was independently debiting the
-                    # same file with no shared lock. Two consequences:
-                    #
-                    #  1. Viewing stats could restore capital the engine had just committed to an
-                    #     open position, letting the bot allocate the same money twice.
-                    #  2. `active_data` is only bound inside the try/except above, so if
-                    #     paper_trades.json was missing or unreadable the guard
-                    #     `'active_data' in locals()` silently made active_invested = 0 and
-                    #     credited back EVERY open position's capital.
-                    #
-                    # trade_brain is the single writer of the wallet file. Report what it says.
-                    w_initial = float(wdata.get("initial") or env_paper_bal)
-                    if w_initial <= 0.0:
-                        w_initial = env_paper_bal
-
-                    w_balance = wdata.get("balance", w_initial)
-
-                    if mode_name == "PAPER" and wdata.get("initial") != env_paper_bal and env_paper_bal > 0:
-                        # Surface the drift instead of silently resetting the running account.
-                        wallet_str_note = (
-                            f"\n <i>Note: PAPER_BALANCE_USD in .env is ${env_paper_bal:.2f} but this "
-                            f"account started at ${w_initial:.2f}. Use the settings menu to reset.</i>"
-                        )
-                    else:
-                        wallet_str_note = ""
-
+                if mode_name == "PAPER":
+                    w_initial = float(settings_manager.get("PAPER_BALANCE_USD"))
+                    w_balance = float(settings_manager.get("PAPER_WALLET_BALANCE"))
                     w_profit = w_balance - w_initial
-                    wallet_str = (f" <b>Actual Wallet PnL:</b> ${w_profit:.2f} "
-                                  f"(Cash: ${w_balance:.2f}){wallet_str_note}")
+                    wallet_str = f" <b>Actual Wallet PnL:</b> ${w_profit:.2f} (Cash: ${w_balance:.2f})"
+                else:
+                    wallet_path = os.path.join(_BOT_DIR, wallet_filename) if wallet_filename else None
+                    if wallet_path and os.path.exists(wallet_path):
+                        with open(wallet_path, 'r') as wf:
+                            wdata = json.load(wf)
+                        w_initial = float(wdata.get("initial", 0.0))
+                        w_balance = float(wdata.get("balance", w_initial))
+                        w_profit = w_balance - w_initial
+                        wallet_str = f" <b>Actual Wallet PnL:</b> ${w_profit:.2f} (Cash: ${w_balance:.2f})"
             except Exception as e:
-                log.warning(f"Could not read {wallet_filename}: {e}")
+                log.warning(f"Could not read wallet for {mode_name}: {e}")
                 
             return (
                 f" <b>{mode_name} Trade Analysis</b>\n"
@@ -321,7 +297,7 @@ def _analyze_trades() -> str:
         paper_trades = [t for t in real_trades if t.get("trade_mode", "PAPER") == "PAPER"]
         live_trades = [t for t in real_trades if t.get("trade_mode", "") in ["LIVE", "TRUE"]]
         
-        paper_text = _get_stats(paper_trades, "PAPER", "paper_wallet.json", "paper_trades.json")
+        paper_text = _get_stats(paper_trades, "PAPER", None, "paper_trades.json")
         live_text = _get_stats(live_trades, "LIVE", "live_wallet.json", "live_trades.json")
         
         return (
@@ -637,15 +613,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
                 elif key == "TAKE_PROFIT_PCT":
                     val = abs(val)
                 
-                if key == "PAPER_BALANCE_USD":
-                    try:
-                        import json
-                        w_path = os.path.join(_BOT_DIR, "paper_wallet.json")
-                        with open(w_path, "w") as f:
-                            json.dump({"balance": float(val), "initial": float(val)}, f, indent=4)
-                        log.info(f"Updated paper_wallet.json to balance: {val}")
-                    except Exception as w_err:
-                        log.error(f"Failed to update paper_wallet.json: {w_err}")
             except ValueError:
                 await update.message.reply_text("Failed. Please enter a valid number.", reply_markup=_main_keyboard())
                 return

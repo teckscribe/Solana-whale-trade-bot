@@ -31,6 +31,7 @@ import uvicorn
 from typing import Dict, Any, Optional
 
 from jupiter_api import get_sol_price_usd
+import settings_manager
 
 load_dotenv()
 
@@ -153,7 +154,6 @@ async def get_dashboard(_: bool = Depends(require_auth)):
     trade_mode = "LIVE" if raw_mode in ["TRUE", "LIVE"] else "PAPER"
     
     trades_file = "live_trades.json" if trade_mode == "LIVE" else "paper_trades.json"
-    wallet_file = "live_wallet.json" if trade_mode == "LIVE" else "paper_wallet.json"
     
     active_trades = []
     if os.path.exists(trades_file):
@@ -165,9 +165,14 @@ async def get_dashboard(_: bool = Depends(require_auth)):
         except Exception: pass
         
     wallet_data = {"balance": 0.0, "initial": 0.0}
-    if os.path.exists(wallet_file):
+    if trade_mode == "PAPER":
+        wallet_data = {
+            "balance": float(settings_manager.get("PAPER_WALLET_BALANCE")),
+            "initial": float(settings_manager.get("PAPER_BALANCE_USD")),
+        }
+    elif os.path.exists("live_wallet.json"):
         try:
-            with open(wallet_file, "r") as f:
+            with open("live_wallet.json", "r") as f:
                 wallet_data = json.load(f)
         except Exception: pass
         

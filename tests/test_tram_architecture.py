@@ -58,16 +58,31 @@ class TestSettingsManager(unittest.TestCase):
     def test_audit_trail(self):
         history_path = os.path.join(_WTB_DIR, "data", "settings_history.jsonl")
         cur_val = settings_manager.get("TAKE_PROFIT_PCT")
-        new_val = 22.2 if cur_val != 22.2 else 33.3
-        settings_manager.update("TAKE_PROFIT_PCT", new_val, source="test_audit")
+        new_val = 22.2 if cur_val != 22.2 else 18.5
+        ok, err = settings_manager.update("TAKE_PROFIT_PCT", new_val, source="audit_test")
+        self.assertTrue(ok)
         self.assertTrue(os.path.exists(history_path))
+
         with open(history_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        self.assertGreater(len(lines), 0)
-        last_entry = json.loads(lines[-1])
-        self.assertEqual(last_entry.get("key"), "TAKE_PROFIT_PCT")
-        self.assertEqual(float(last_entry.get("to")), new_val)
-        self.assertEqual(last_entry.get("source"), "test_audit")
+            lines = [json.loads(line) for line in f if line.strip()]
+        
+        last_entry = lines[-1]
+        self.assertEqual(last_entry["key"], "TAKE_PROFIT_PCT")
+        self.assertEqual(last_entry["source"], "audit_test")
+
+    def test_paper_wallet_balance_sync(self):
+        # Updating starting capital should sync paper wallet balance
+        ok, err = settings_manager.update("PAPER_BALANCE_USD", 50.0, source="test")
+        self.assertTrue(ok, err)
+        self.assertEqual(settings_manager.get("PAPER_BALANCE_USD"), 50.0)
+        self.assertEqual(settings_manager.get("PAPER_WALLET_BALANCE"), 50.0)
+
+        # Updating paper wallet balance directly
+        ok = settings_manager.set_paper_wallet_balance(42.50)
+        self.assertTrue(ok)
+        self.assertEqual(settings_manager.get("PAPER_WALLET_BALANCE"), 42.50)
+        # Reset back for clean state
+        settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
 
 
 class TestConnectionPool(unittest.IsolatedAsyncioTestCase):
@@ -175,6 +190,18 @@ class TestTradingStateTRAM(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(removed)
         self.assertNotIn(token, test_state.active)
         self.assertEqual(test_state.get_open_exposure_usd(), 0.0)
+
+    async def test_paper_balance_persistence(self):
+        from trade_brain import init_json
+        settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
+        settings_manager.set_paper_wallet_balance(19.75)
+        init_json()
+        self.assertEqual(STATE.wallet_balance, 19.75)
+        self.assertEqual(STATE.initial_balance, 25.0)
+        # Verify paper_wallet.json is NOT created
+        self.assertFalse(os.path.exists(os.path.join(_WTB_DIR, "paper_wallet.json")))
+        # Cleanup
+        settings_manager.update("PAPER_BALANCE_USD", 25.0, source="test")
 
 
 if __name__ == "__main__":

@@ -93,7 +93,7 @@ def _refresh_settings():
 
         if TRADE_MODE == "PAPER":
             LIVE_TRADES_FILE = "paper_trades.json"
-            WALLET_FILE = "paper_wallet.json"
+            WALLET_FILE = None
         else:
             LIVE_TRADES_FILE = "live_trades.json"
             WALLET_FILE = "live_wallet.json"
@@ -188,7 +188,7 @@ _dashboard_task = None
 
 if TRADE_MODE == "PAPER":
     LIVE_TRADES_FILE = "paper_trades.json"
-    WALLET_FILE = "paper_wallet.json"
+    WALLET_FILE = None
 else:
     LIVE_TRADES_FILE = "live_trades.json"
     WALLET_FILE = "live_wallet.json"
@@ -297,6 +297,8 @@ async def flush_all_state_now():
 
         _save_json_atomic(LIVE_TRADES_FILE, trades_list)
         if TRADE_MODE == "PAPER":
+            settings_manager.set_paper_wallet_balance(wallet_bal)
+        elif WALLET_FILE:
             _save_json_atomic(WALLET_FILE, {"balance": wallet_bal, "initial": wallet_init})
 
         if pending_closed:
@@ -746,26 +748,30 @@ def init_json():
         if not os.path.exists(file_path):
             _save_json_atomic(file_path, [])
 
-    if os.path.exists(WALLET_FILE):
-        try:
-            with open(WALLET_FILE, "r") as f:
-                wdata = json.load(f)
-            STATE.wallet_balance = float(wdata.get("balance", 0.0))
-            STATE.initial_balance = float(wdata.get("initial", STATE.wallet_balance))
-        except Exception as e:
-            log.error(f"Failed to load wallet file {WALLET_FILE}: {e}")
-    else:
+    if TRADE_MODE == "PAPER":
         init_bal = float(settings_manager.get("PAPER_BALANCE_USD"))
-        STATE.wallet_balance = init_bal
+        current_bal = float(settings_manager.get("PAPER_WALLET_BALANCE"))
+        if current_bal <= 0.0:
+            current_bal = init_bal
+            settings_manager.set_paper_wallet_balance(current_bal)
         STATE.initial_balance = init_bal
-        _save_json_atomic(WALLET_FILE, {"balance": init_bal, "initial": init_bal})
+        STATE.wallet_balance = current_bal
+    else:
+        if WALLET_FILE and os.path.exists(WALLET_FILE):
+            try:
+                with open(WALLET_FILE, "r") as f:
+                    wdata = json.load(f)
+                STATE.wallet_balance = float(wdata.get("balance", 0.0))
+                STATE.initial_balance = float(wdata.get("initial", STATE.wallet_balance))
+            except Exception as e:
+                log.error(f"Failed to load wallet file {WALLET_FILE}: {e}")
 
     # Sync with settings if user updated PAPER_BALANCE_USD via UI/Telegram
     cfg_bal = float(settings_manager.get("PAPER_BALANCE_USD"))
     if STATE.initial_balance != cfg_bal and cfg_bal > 0 and TRADE_MODE == "PAPER":
         STATE.initial_balance = cfg_bal
         STATE.wallet_balance = cfg_bal
-        _save_json_atomic(WALLET_FILE, {"balance": cfg_bal, "initial": cfg_bal})
+        settings_manager.set_paper_wallet_balance(cfg_bal)
 
 async def _live_dashboard_loop():
     """
@@ -790,6 +796,8 @@ async def _live_dashboard_loop():
 
             # 2. Flush wallet state
             if TRADE_MODE == "PAPER":
+                settings_manager.set_paper_wallet_balance(wallet_bal)
+            elif WALLET_FILE:
                 _save_json_atomic(WALLET_FILE, {"balance": wallet_bal, "initial": wallet_init})
 
             # 3. Flush completed trades to append-only NDJSON and mirror to JSON

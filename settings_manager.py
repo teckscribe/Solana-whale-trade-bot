@@ -51,6 +51,7 @@ SPEC = [
     _s("GMGN_DISCOVERY_ENABLED", "bool", True, group="General", help_="Enable GMGN discovery"),
     _s("DISCOVERY_INTERVAL_MINUTES", "int", 10, min_val=1, max_val=60, group="General", help_="Interval for discovery in minutes"),
     _s("PAPER_BALANCE_USD", "float", 25.0, min_val=1.0, max_val=100000.0, group="General", help_="Starting paper balance in USD"),
+    _s("PAPER_WALLET_BALANCE", "float", 25.0, min_val=0.0, max_val=100000.0, group="General", help_="Current simulated paper wallet balance in USD"),
     _s("POLL_INTERVAL", "float", 2.0, min_val=1.0, max_val=30.0, group="General", help_="Polling interval (dynamically computed in trade_brain)"),
     _s("MAX_RESUME_AGE_HOURS", "float", 2.0, min_val=0.1, max_val=48.0, group="General", help_="Maximum age in hours of saved positions to resume on startup"),
 ]
@@ -195,11 +196,15 @@ def _build_typed(raw: dict, use_overrides: bool = True) -> dict:
             typed[key] = _coerce(key, _overrides[key], "shell env")
         elif key in raw:
             typed[key] = _coerce(key, raw[key], "settings.json")
+        elif key == "PAPER_WALLET_BALANCE" and "PAPER_BALANCE_USD" in raw:
+            typed[key] = _coerce(key, raw["PAPER_BALANCE_USD"], "settings.json")
         else:
             if env_file is None:
                 env_file = _read_env_file()
             if key in env_file:
                 typed[key] = _coerce(key, env_file[key], ".env")
+            elif key == "PAPER_WALLET_BALANCE" and "PAPER_BALANCE_USD" in env_file:
+                typed[key] = _coerce(key, env_file["PAPER_BALANCE_USD"], ".env")
             else:
                 typed[key] = SPEC_BY_KEY[key]["default"]
     return typed
@@ -283,6 +288,9 @@ def update(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]:
             raw.setdefault(k, fallback[k])
         
         raw[key] = typed
+        if key == "PAPER_BALANCE_USD":
+            raw["PAPER_WALLET_BALANCE"] = typed
+
         if not _write_raw(raw):
             return False, "could not write settings.json"
         
@@ -292,6 +300,21 @@ def update(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]:
         _append_history(key, from_str, to_str_val, source)
         
         return True, ""
+
+def set_paper_wallet_balance(balance: float) -> bool:
+    """Fast-path balance update directly to settings.json without audit log spam."""
+    with _lock:
+        val = round(float(balance), 6)
+        raw = dict(_read_file_raw())
+        raw.pop("_comment", None)
+        raw.pop("_updated", None)
+        fallback = _build_typed(raw, use_overrides=False)
+        for k in KEYS:
+            raw.setdefault(k, fallback[k])
+        if raw.get("PAPER_WALLET_BALANCE") == val:
+            return True
+        raw["PAPER_WALLET_BALANCE"] = val
+        return _write_raw(raw)
 
 def set_value(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]:
     """Alias for update() for compatibility."""

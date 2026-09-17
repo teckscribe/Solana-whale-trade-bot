@@ -9,7 +9,6 @@ ngrok.yml
 # Runtime & State Data
 data/
 paper_trades.json
-paper_wallet.json
 live_trades.json
 live_wallet.json
 ml_training_data.json
