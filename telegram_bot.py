@@ -414,9 +414,24 @@ def _get_ngrok_url(target_port: int = None) -> str:
     if target_port is None:
         target_port = int(os.getenv("WEB_PORT", os.getenv("NGROK_TARGET_PORT", "8101")))
     
-    env_port = os.getenv("NGROK_API_PORT", "4040")
-    ports_to_try = [4040, 4041, 4042, 4043, 4044, 4045]
-    if env_port.isdigit() and int(env_port) in ports_to_try:
+    # Try reading web_addr from ngrok.yml first to guarantee 1:1 binding with this bot
+    ngrok_yml_path = os.path.join(_BOT_DIR, "ngrok.yml")
+    pinned_port = None
+    if os.path.exists(ngrok_yml_path):
+        try:
+            with open(ngrok_yml_path, "r") as yf:
+                for yline in yf:
+                    if "web_addr:" in yline:
+                        parts = yline.split(":")
+                        if len(parts) >= 2 and parts[-1].strip().strip('"\'').isdigit():
+                            pinned_port = int(parts[-1].strip().strip('"\''))
+                            break
+        except Exception:
+            pass
+
+    env_port = os.getenv("NGROK_API_PORT", str(pinned_port or 4045))
+    ports_to_try = [4045, 4044, 4040, 4041, 4042, 4043]
+    if str(env_port).isdigit() and int(env_port) in ports_to_try:
         ports_to_try.remove(int(env_port))
         ports_to_try.insert(0, int(env_port))
 

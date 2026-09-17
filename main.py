@@ -168,17 +168,32 @@ async def main():
     ml_task = asyncio.create_task(ml_retrain_loop())
     
     # Start the FastAPI Web Dashboard Server on Port 8101 (or WEB_PORT from .env)
-    try:
-        from web_server import app as fastapi_app
-        import uvicorn
+    # If running alongside standalone wtb-web.service, avoids port collisions automatically
+    web_task = None
+    run_embedded = os.getenv("EMBEDDED_WEB_SERVER", "auto").strip().lower()
+    if run_embedded not in ["false", "0", "no", "disabled"]:
         web_port = int(os.getenv("WEB_PORT", "8101"))
-        web_config = uvicorn.Config(app=fastapi_app, host="0.0.0.0", port=web_port, log_level="info")
-        web_server = uvicorn.Server(web_config)
-        web_task = asyncio.create_task(web_server.serve())
-        log.info(f"🚀 Web Dashboard listening on http://0.0.0.0:{web_port}")
-    except Exception as web_e:
-        log.error(f"Failed to start FastAPI Web Server: {web_e}")
-        web_task = None
+        import socket
+        port_in_use = False
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.5)
+                port_in_use = (s.connect_ex(('127.0.0.1', web_port)) == 0)
+        except Exception:
+            port_in_use = False
+
+        if port_in_use:
+            log.info(f"Port {web_port} is already active (handled by standalone web service). Skipping embedded dashboard.")
+        else:
+            try:
+                from web_server import app as fastapi_app
+                import uvicorn
+                web_config = uvicorn.Config(app=fastapi_app, host="0.0.0.0", port=web_port, log_level="info")
+                web_server = uvicorn.Server(web_config)
+                web_task = asyncio.create_task(web_server.serve())
+                log.info(f"🚀 Web Dashboard listening on http://0.0.0.0:{web_port}")
+            except Exception as web_e:
+                log.error(f"Failed to start FastAPI Web Server: {web_e}")
 
     # Wait for all (they run forever)
     named_tasks = {

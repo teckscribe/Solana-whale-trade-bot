@@ -1,5 +1,9 @@
 version: "2"
 authtoken: "YOUR_NGROK_AUTHTOKEN_HERE"
+# Dedicated inspection-API port for WTB's ngrok agent.
+# Other co-hosted bots: CSB (4040), base_whale (4041), OTB (4042), IOB (4043).
+# Pinning WTB to 4045 prevents port collisions and cross-bot tunnel reading.
+web_addr: "127.0.0.1:4045"
 
 tunnels:
   wtb_dashboard:

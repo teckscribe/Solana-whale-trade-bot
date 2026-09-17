@@ -485,7 +485,9 @@ async def download_log(filename: str, _: bool = Depends(require_auth)):
     )
 
 if __name__ == "__main__":
-    uvicorn.run("web_server:app", host="127.0.0.1", port=8101, reload=False)
+    web_port = int(os.getenv("WEB_PORT", "8101"))
+    web_host = os.getenv("WEB_HOST", "0.0.0.0")
+    uvicorn.run("web_server:app", host=web_host, port=web_port, reload=False)
 
 
 
