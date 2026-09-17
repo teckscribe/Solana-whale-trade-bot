@@ -1022,71 +1022,68 @@ body {
     margin-top: 2px;
 }
 
-/* View Mode with Pen Emoji */
+/* ── Consistent Right Column for Settings Controls ── */
+.setting-control-col {
+    width: 216px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-shrink: 0;
+}
+
 .setting-view-mode {
+    width: 100%;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-    flex-shrink: 0;
 }
 
-.setting-display-val {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.86rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    background: var(--bg-surface-subtle);
-    padding: 5px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-subtle);
-    min-width: 70px;
-    text-align: right;
-}
-
-.btn-edit-setting {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    padding: 5px 9px;
-    font-size: 0.95rem;
-    line-height: 1;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-edit-setting:hover {
-    background: var(--brand-subtle);
-    border-color: var(--brand-border);
-    transform: scale(1.08);
-}
-
-/* Edit Mode with Confirm / Cancel */
 .setting-edit-mode {
+    width: 100%;
     display: none;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-    flex-shrink: 0;
 }
 
 .setting-edit-mode.active {
     display: flex;
 }
 
-.setting-input {
-    width: 140px;
-    padding: 6px 10px;
+/* Badge and Input have identical 136px width & 34px height for seamless column alignment */
+.setting-display-val {
+    width: 136px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-family: 'Space Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--bg-surface-subtle);
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.setting-input {
+    width: 136px;
+    height: 34px;
+    padding: 0 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.84rem;
+    font-weight: 600;
     border: 1px solid var(--brand-border);
     background: var(--bg-surface);
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     outline: none;
-    text-align: right;
+    text-align: center;
+    box-sizing: border-box;
     box-shadow: 0 0 0 2px var(--brand-subtle);
 }
 
@@ -1094,21 +1091,74 @@ body {
     border-color: var(--brand-primary);
 }
 
-.setting-edit-actions {
+select.setting-input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 14px;
+    padding-right: 24px;
+    cursor: pointer;
+}
+
+.setting-view-actions {
+    width: 68px;
     display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.setting-edit-actions {
+    width: 68px;
+    display: flex;
+    align-items: center;
     gap: 4px;
+    flex-shrink: 0;
+}
+
+.btn-edit-setting {
+    width: 32px;
+    height: 34px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.btn-edit-setting:hover {
+    background: var(--brand-subtle);
+    border-color: var(--brand-border);
+    transform: scale(1.06);
 }
 
 .btn-inline-save {
+    width: 32px;
+    height: 34px;
     background: var(--profit-bg);
     border: 1px solid var(--profit-border);
     color: var(--profit-green);
     border-radius: var(--radius-sm);
-    padding: 6px 10px;
-    font-size: 0.8rem;
+    padding: 0;
+    font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .btn-inline-save:hover {
@@ -1117,15 +1167,21 @@ body {
 }
 
 .btn-inline-cancel {
+    width: 32px;
+    height: 34px;
     background: var(--bg-surface-subtle);
     border: 1px solid var(--border-subtle);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
-    padding: 6px 10px;
-    font-size: 0.8rem;
+    padding: 0;
+    font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .btn-inline-cancel:hover {
@@ -1485,8 +1541,10 @@ body {
     .app-container { padding: 16px; }
     .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
     .kpi-value { font-size: 1.3rem; }
-    .settings-row { grid-template-columns: 1fr; gap: 6px; }
-    .setting-input { text-align: left; }
+    .settings-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .setting-control-col { width: 100%; justify-content: space-between; }
+    .setting-view-mode, .setting-edit-mode { justify-content: space-between; }
+    .setting-display-val, .setting-input { flex: 1; min-width: 0; width: auto; max-width: none; }
 }
 
 @media (max-width: 480px) {

@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=4.3">
+    <link rel="stylesheet" href="/static/style.css?v=4.4">
 </head>
 <body>
     <!-- Top Global App Bar -->
@@ -52,7 +52,6 @@
             <button class="nav-tab" data-tab="whales" role="tab" aria-selected="false">
                 <span class="nav-icon">🐋</span>
                 <span class="nav-label">Whale Analyze</span>
-                <span id="badge-whale-count" class="tab-badge">229</span>
             </button>
             <button class="nav-tab" data-tab="settings" role="tab" aria-selected="false">
                 <span class="nav-icon">⚙️</span>
@@ -92,7 +91,6 @@
             </button>
             <button class="drawer-item" data-tab="whales">
                 <span>🐋 Whale Analyze</span>
-                <span class="drawer-badge" id="m-badge-whales">229</span>
             </button>
             <button class="drawer-item" data-tab="settings">
                 <span>⚙️ Settings & Log</span>
@@ -130,7 +128,7 @@
                     </div>
                     <div class="kpi-value" id="dash-total-val">$0.00</div>
                     <div class="kpi-footer">
-                        <span class="kpi-subtext">Cash Reserve + Open Positions</span>
+                        <span class="kpi-subtext" id="dash-total-sub">Cash Reserve + Open Positions</span>
                     </div>
                 </div>
 
@@ -152,7 +150,7 @@
                     </div>
                     <div class="kpi-value" id="dash-net-pnl">$0.00</div>
                     <div class="kpi-footer">
-                        <span class="kpi-subtext">Cumulative Realized Gains</span>
+                        <span class="kpi-subtext" id="dash-net-pnl-sub">Cumulative Realized Gains</span>
                     </div>
                 </div>
 
@@ -556,6 +554,6 @@
     <!-- Toast Notification Banner -->
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=4.3"></script>
+    <script src="/static/app.js?v=4.4"></script>
 </body>
 </html>

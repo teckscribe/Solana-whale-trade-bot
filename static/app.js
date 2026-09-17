@@ -139,9 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── 5. Helper Formatters ───────────────────────────────────────────────
-    const formatUSD = (val) => {
+    const formatUSD = (val, forceSign = false) => {
         const num = parseFloat(val) || 0;
-        return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const isNeg = num < 0;
+        const absVal = Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (isNeg) return `-$${absVal}`;
+        if (forceSign && num > 0) return `+$${absVal}`;
+        return `$${absVal}`;
     };
 
     const formatShortAddr = (addr) => {
@@ -183,14 +187,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalValEl = document.getElementById('dash-total-val');
             if (totalValEl) totalValEl.textContent = formatUSD(data.total_value);
 
+            const totalSubEl = document.getElementById('dash-total-sub');
+            if (totalSubEl) {
+                const cash = data.available_cash || 0;
+                const openVal = Math.max(0, (data.total_value || 0) - cash);
+                totalSubEl.textContent = `Cash ${formatUSD(cash)} + Open ${formatUSD(openVal)}`;
+            }
+
             const cashEl = document.getElementById('dash-cash');
             if (cashEl) cashEl.textContent = formatUSD(data.available_cash);
 
             const netPnlEl = document.getElementById('dash-net-pnl');
             if (netPnlEl) {
                 const pnl = data.net_profit || 0;
-                netPnlEl.textContent = (pnl >= 0 ? '+' : '') + formatUSD(pnl);
+                netPnlEl.textContent = formatUSD(pnl, true);
                 netPnlEl.className = `kpi-value ${pnl >= 0 ? 'text-emerald' : 'text-rose'}`;
+            }
+
+            const netPnlSubEl = document.getElementById('dash-net-pnl-sub');
+            if (netPnlSubEl) {
+                const unPnl = data.unrealized_profit || 0;
+                netPnlSubEl.textContent = `Realized: ${formatUSD(data.net_profit, true)} | Floating: ${formatUSD(unPnl, true)}`;
             }
 
             const activeCountEl = document.getElementById('dash-active-trades');
@@ -582,13 +599,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const wlEl = document.getElementById('whale-whitelists');
             if (wlEl) wlEl.textContent = data.active_whitelists || 0;
 
-            // Update tab badge
-            const count = data.active_whitelists || data.total_db || 0;
-            const b1 = document.getElementById('badge-whale-count');
-            if (b1) b1.textContent = count;
-            const b2 = document.getElementById('m-badge-whales');
-            if (b2) b2.textContent = count;
-
             allWhales = data.whales || [];
 
             // Compute top WR and total signals
@@ -855,18 +865,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="setting-help">${help}</span>
                         </div>
 
-                        <!-- View Mode (Default) -->
-                        <div class="setting-view-mode" id="view-mode-${key}">
-                            <span class="setting-display-val" id="val-display-${key}">${displayVal}</span>
-                            <button class="btn-edit-setting" data-key="${key}" title="Edit ${key}" aria-label="Edit ${key}">✏️</button>
-                        </div>
+                        <div class="setting-control-col">
+                            <!-- View Mode (Default) -->
+                            <div class="setting-view-mode" id="view-mode-${key}">
+                                <span class="setting-display-val" id="val-display-${key}">${displayVal}</span>
+                                <div class="setting-view-actions">
+                                    <button class="btn-edit-setting" data-key="${key}" title="Edit ${key}" aria-label="Edit ${key}">✏️</button>
+                                </div>
+                            </div>
 
-                        <!-- Edit Mode (Toggled via ✏️) -->
-                        <div class="setting-edit-mode" id="edit-mode-${key}">
-                            ${inputHtml}
-                            <div class="setting-edit-actions">
-                                <button class="btn-inline-save" data-key="${key}" title="Save ${key}">✓</button>
-                                <button class="btn-inline-cancel" data-key="${key}" title="Cancel">✕</button>
+                            <!-- Edit Mode (Toggled via ✏️) -->
+                            <div class="setting-edit-mode" id="edit-mode-${key}">
+                                ${inputHtml}
+                                <div class="setting-edit-actions">
+                                    <button class="btn-inline-save" data-key="${key}" title="Save ${key}">✓</button>
+                                    <button class="btn-inline-cancel" data-key="${key}" title="Cancel">✕</button>
+                                </div>
                             </div>
                         </div>
                     </div>

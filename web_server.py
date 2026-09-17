@@ -250,18 +250,23 @@ async def get_dashboard(_: bool = Depends(require_auth)):
             available_cash = wallet_data.get("balance", 0.0)
                     
     total_value = available_cash
+    unrealized_profit = 0.0
     for v in active_trades:
-        size = v.get("trade_size", v.get("trade_size_usd", 0.0))
-        pnl = v.get("profit_usd", 0.0)
-        if pnl == 0.0 and v.get("entry_price", 0.0) > 0:
-            pnl = ((v.get("current_price", 0.0) - v.get("entry_price", 0.0)) / v.get("entry_price", 1.0)) * size
+        size = float(v.get("trade_size") or v.get("trade_size_usd") or 0.0)
+        pnl = float(v.get("profit_usd") or 0.0)
+        entry_price = float(v.get("entry_price") or v.get("entry_usd_price") or 0.0)
+        current_price = float(v.get("current_price") or entry_price)
+        if pnl == 0.0 and entry_price > 0:
+            pnl = ((current_price - entry_price) / entry_price) * size
+        unrealized_profit += pnl
         total_value += (size + pnl)
         
     return {
         "mode": trade_mode,
-        "total_value": total_value,
-        "available_cash": available_cash,
-        "net_profit": net_profit,
+        "total_value": round(total_value, 2),
+        "available_cash": round(available_cash, 2),
+        "net_profit": round(net_profit, 2),
+        "unrealized_profit": round(unrealized_profit, 2),
         "active_trades_count": len(active_trades),
         "max_trades": max_trades,
         "trades": active_trades
