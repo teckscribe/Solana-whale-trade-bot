@@ -63,6 +63,13 @@
     --radius-md: 10px;
     --radius-lg: 14px;
     --radius-pill: 9999px;
+
+    /* Developer Console & Terminal (Light Mode Default) */
+    --terminal-bg: #FFFFFF;
+    --terminal-header-bg: #F8FAFC;
+    --terminal-border: #E2E8F0;
+    --terminal-text: #0F172A;
+    --terminal-title: #475569;
 }
 
 /* ── Dark Mode Override ─────────────────────────────────────────────────── */
@@ -113,6 +120,13 @@
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
     --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
     --shadow-card-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+
+    /* Developer Console & Terminal (Dark Mode) */
+    --terminal-bg: #090D16;
+    --terminal-header-bg: #0B0F19;
+    --terminal-border: #1E293B;
+    --terminal-text: #E2E8F0;
+    --terminal-title: #94A3B8;
 }
 
 /* ── Reset & Core ───────────────────────────────────────────────────────── */
@@ -720,22 +734,22 @@ span[style*="monospace"], td[style*="monospace"], .mono-font {
     opacity: 0.8;
 }
 
-/* ── System & Logs (Embedded Developer Terminal) ────────────────────────── */
+/* ── System & Logs (Developer Terminal) ────────────────────────────────── */
 .log-viewer-container {
     border-radius: var(--radius-md);
     overflow: hidden;
-    border: 1px solid #1E293B;
-    box-shadow: var(--shadow-md);
+    border: 1px solid var(--terminal-border);
+    box-shadow: var(--shadow-card);
     margin-top: 14px;
 }
 
 .log-terminal-header {
-    background: #0B0F19;
+    background: var(--terminal-header-bg);
     padding: 10px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #1E293B;
+    border-bottom: 1px solid var(--terminal-border);
 }
 
 .terminal-dots {
@@ -755,15 +769,13 @@ span[style*="monospace"], td[style*="monospace"], .mono-font {
 .terminal-title {
     font-family: 'Space Mono', monospace;
     font-size: 0.75rem;
-    color: #94A3B8;
+    color: var(--terminal-title);
     font-weight: 600;
 }
 
-/* Component override: Developer console keeps dark legibility per modern web guidance */
 .log-viewer {
-    color-scheme: dark;
-    background: #090D16;
-    color: #E2E8F0;
+    background: var(--terminal-bg);
+    color: var(--terminal-text);
     font-family: 'Space Mono', 'JetBrains Mono', monospace;
     font-size: 0.8rem;
     line-height: 1.5;
@@ -771,6 +783,30 @@ span[style*="monospace"], td[style*="monospace"], .mono-font {
     white-space: pre-wrap;
     max-height: 500px;
     overflow-y: auto;
+    border: none;
+}
+
+/* Header theme toggle button */
+.theme-toggle-btn-top {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+}
+
+.theme-toggle-btn-top:hover {
+    background: var(--bg-surface-subtle);
+    border-color: var(--brand-border);
+    color: var(--brand-primary);
 }
 
 .log-viewer::-webkit-scrollbar {

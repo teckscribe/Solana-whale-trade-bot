@@ -4,17 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solana Whale Terminal — Live Dashboard</title>
-    <!-- FOUC Prevention Script -->
+    <!-- Force & Enforce Light Theme Default -->
     <script>
-        try {
-            const savedTheme = localStorage.getItem('wtb_theme') || 'light';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        } catch (e) {}
+        (function() {
+            try {
+                let saved = localStorage.getItem('wtb_theme');
+                if (!saved || saved === 'dark') {
+                    saved = 'light';
+                    localStorage.setItem('wtb_theme', 'light');
+                }
+                document.documentElement.setAttribute('data-theme', saved);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=3.5">
 </head>
 <body>
     <div class="bg-grid-pattern"></div>
@@ -25,7 +33,10 @@
             <span class="brand-icon">🐋</span>
             <span class="brand-name">WhaleBot Terminal</span>
         </div>
-        <button id="mobile-toggle" class="sidebar-toggle">☰</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="mobile-theme-toggle" class="sidebar-toggle" title="Switch Theme" style="font-size: 0.95rem; padding: 6px 10px;">☀️</button>
+            <button id="mobile-toggle" class="sidebar-toggle">☰</button>
+        </div>
     </div>
     
     <div class="sidebar" id="sidebar">
@@ -83,6 +94,10 @@
                     <p>Real-time telemetry, portfolio valuations, and active copy-trade positions.</p>
                 </div>
                 <div class="header-actions">
+                    <button id="header-theme-toggle" class="theme-toggle-btn-top" title="Switch Theme">
+                        <span id="header-theme-icon">☀️</span>
+                        <span id="header-theme-text">Light Theme</span>
+                    </button>
                     <div id="mode-badge" class="badge badge-mode">MODE: LOADING...</div>
                 </div>
             </div>
@@ -291,6 +306,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=3.5"></script>
 </body>
 </html>

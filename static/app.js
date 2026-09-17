@@ -39,30 +39,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     const themeToggleLabel = document.getElementById('theme-toggle-label');
     const themeTogglePill = document.getElementById('theme-toggle-pill');
+    const headerThemeToggle = document.getElementById('header-theme-toggle');
+    const headerThemeIcon = document.getElementById('header-theme-icon');
+    const headerThemeText = document.getElementById('header-theme-text');
+    const mobileThemeToggle = document.getElementById('mobile-theme-toggle');
 
     function syncThemeUI(theme) {
-        if (!themeToggleLabel || !themeTogglePill) return;
-        if (theme === 'dark') {
-            themeToggleLabel.textContent = '🌙 Dark Theme';
-            themeTogglePill.textContent = 'Switch to Light';
-        } else {
-            themeToggleLabel.textContent = '☀️ Light Theme';
-            themeTogglePill.textContent = 'Switch to Dark';
-        }
+        const isDark = theme === 'dark';
+        if (themeToggleLabel) themeToggleLabel.textContent = isDark ? '🌙 Dark Theme' : '☀️ Light Theme';
+        if (themeTogglePill) themeTogglePill.textContent = isDark ? 'Switch to Light' : 'Switch to Dark';
+        if (headerThemeIcon) headerThemeIcon.textContent = isDark ? '🌙' : '☀️';
+        if (headerThemeText) headerThemeText.textContent = isDark ? 'Dark Theme' : 'Light Theme';
+        if (mobileThemeToggle) mobileThemeToggle.textContent = isDark ? '🌙' : '☀️';
+    }
+
+    function toggleTheme() {
+        const active = document.documentElement.getAttribute('data-theme') || 'light';
+        const next = active === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('wtb_theme', next);
+        syncThemeUI(next);
     }
 
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     syncThemeUI(currentTheme);
 
-    if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', () => {
-            const active = document.documentElement.getAttribute('data-theme') || 'light';
-            const next = active === 'light' ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('wtb_theme', next);
-            syncThemeUI(next);
-        });
-    }
+    if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
+    if (headerThemeToggle) headerThemeToggle.addEventListener('click', toggleTheme);
+    if (mobileThemeToggle) mobileThemeToggle.addEventListener('click', toggleTheme);
 
     // ── Sidebar Controls ────────────────────────────────────────────────────
     const sidebar = document.getElementById('sidebar');
