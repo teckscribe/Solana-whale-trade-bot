@@ -70,10 +70,18 @@ elif [ -f "$APP_DIR/ngrok.yml.example" ]; then
     sed "s/8101/${WEB_PORT}/g" "$APP_DIR/ngrok.yml.example" > "$APP_DIR/ngrok.yml"
 fi
 
-# ── 3. Build & Write Unit Files Dynamically ────────────────────────────────────
+# ── 3. Stop Running Services & Clean Up Legacy Units ──────────────────────────
+echo "🛑 Stopping any existing WTB services to prevent duplicate processes..."
+sudo systemctl stop wtb wtb-bot wtb-web wtb-ngrok wtb-tg wtb-ui 2>/dev/null || true
+
+# Disable legacy names so systemd wants-links don't conflict
+sudo systemctl disable wtb-tg wtb-ui 2>/dev/null || true
+sudo rm -f /etc/systemd/system/wtb-tg.service /etc/systemd/system/wtb-ui.service
+
+# ── 4. Build & Write Unit Files Dynamically ────────────────────────────────────
 echo "🔨 Generating dynamic systemd service unit files..."
 
-# 3a. wtb.service (Trading Engine)
+# 4a. wtb.service (Trading Engine)
 cat <<EOF | sudo tee /etc/systemd/system/wtb.service >/dev/null
 [Unit]
 Description=wtb — Solana Whale Tracker LIVE Bot
@@ -252,12 +260,12 @@ SyslogIdentifier=wtb-ngrok
 WantedBy=multi-user.target
 EOF
 
-# ── 4. Backward Compatibility Aliases ──────────────────────────────────────────
+# ── 5. Backward Compatibility Aliases ──────────────────────────────────────────
 echo "🔗 Setting up compatibility symlinks for legacy service names..."
 sudo ln -sf /etc/systemd/system/wtb-bot.service /etc/systemd/system/wtb-tg.service
 sudo ln -sf /etc/systemd/system/wtb-web.service /etc/systemd/system/wtb-ui.service
 
-# ── 5. Systemd Reload & Enable ────────────────────────────────────────────────
+# ── 6. Systemd Reload & Enable ────────────────────────────────────────────────
 echo "🔄 Reloading systemd daemon..."
 sudo systemctl daemon-reload
 
