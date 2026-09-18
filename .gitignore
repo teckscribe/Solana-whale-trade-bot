@@ -7,7 +7,8 @@ ngrok.yml
 !ngrok.yml.example
 
 # Runtime & State Data
-data/
+data/*
+!data/settings.json
 paper_trades.json
 live_trades.json
 live_wallet.json
