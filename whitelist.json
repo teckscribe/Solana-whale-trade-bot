@@ -1,1147 +1,573 @@
 {
-  "CyrBETDKGZBZYFYkttincx6TYDAKzarhbi32EQpV965F": {
-    "discovered_at": 1784026778.9380643,
-    "last_active": 1785235044.5574222,
-    "status": "WHITELIST"
-  },
-  "BHvaHbCbAC6kbid6M5hhrJxfppE7BHSKdoEUP9683Z5G": {
-    "discovered_at": 1784598787.3197236,
-    "last_active": 1787768399.5602763,
-    "status": "WHITELIST"
-  },
-  "CDQ1zkrE5YRrzkfrXdac1iudU7FDK34LHo4m7awfXe3j": {
-    "discovered_at": 1784798979.5032794,
-    "last_active": 1786552444.1587458,
-    "status": "WHITELIST"
-  },
-  "3U2qM4dSRZEaRuti1ZsUDrmPNRTUx3d8s3drYJSDg5JR": {
-    "discovered_at": 1784797116.5972948,
-    "last_active": 1784797116.5972948,
-    "status": "WHITELIST"
-  },
-  "893UHKsbQFT6uuBH5V3PNjotH7MhqS7MZ68rb4mG3UjD": {
-    "discovered_at": 1784798764.3620641,
-    "last_active": 1785910947.4053397,
-    "status": "WHITELIST"
-  },
-  "C9EuLesKkPEDRSRttGRmNXkpbbLz4s9oChDfY7mjcx7f": {
-    "discovered_at": 1784798764.3620641,
-    "last_active": 1786098944.9377902,
-    "status": "WHITELIST"
-  },
-  "ENHgrVoDfWqX6vwqF3W87Nb5Mwq68G4nRcvHsxAfohvQ": {
-    "discovered_at": 1784802722.1103354,
-    "last_active": 1784802722.1103354,
-    "status": "WHITELIST"
-  },
-  "GLk2E9c2B6zJeZcqJBuVnXrTGhD8vcf37jXc7od6Rce5": {
-    "discovered_at": 1785052478.933315,
-    "last_active": 1785082529.0850048,
-    "status": "WHITELIST"
-  },
-  "3fcquCD8Aq5fBG43rzU1BbiZXGV9WeoPr7RdcFedKsa8": {
-    "discovered_at": 1785051212.2290037,
-    "last_active": 1785082502.251216,
-    "status": "WHITELIST"
-  },
-  "737LC9nQDruPskeREHaj7kNR1agmsUZugvFkrDDLwAPL": {
-    "discovered_at": 1785069879.7169795,
-    "last_active": 1785069879.7169795,
-    "status": "WHITELIST"
-  },
-  "31CFx1jki5rErzPG1SCWuRm1BMvgPtxqvXku88rqzEQE": {
-    "discovered_at": 1785076858.2351358,
-    "last_active": 1785076858.2351358,
-    "status": "WHITELIST"
-  },
-  "HZoTPb8QoFMqEaS3nnCcqH7HvBHimWyTBcepDdypmyNX": {
-    "discovered_at": 1785067351.9892356,
-    "last_active": 1785067351.9892356,
-    "status": "WHITELIST"
-  },
-  "BQADvVSEDbqoKkahAFe76XyCm8SVodhXRrtEJF4oFgrb": {
-    "discovered_at": 1785056682.587589,
-    "last_active": 1785056682.587589,
-    "status": "WHITELIST"
-  },
-  "6btJtEKMtSwVXnrmgtSVT7iT6EZSatZwXzMBZCUDxUDx": {
-    "discovered_at": 1785061749.6583562,
-    "last_active": 1785061749.6583562,
-    "status": "WHITELIST"
-  },
-  "2pg9qXfwTRMUJ7ksumGHAC5kKzoMt4iKY7g1eQj1rY6i": {
-    "discovered_at": 1785074318.2522004,
-    "last_active": 1785074318.2522004,
-    "status": "WHITELIST"
-  },
-  "BRrymhYt5TCCfV1LVBJ5MhhNWZ1Qc9Mjf5Hcprqeha9J": {
-    "discovered_at": 1785077491.4068437,
-    "last_active": 1785077491.4068437,
-    "status": "WHITELIST"
-  },
-  "GegcRTRPSnkFyaadRhgbKbJD69pcBHPra5UG3G9HF6HM": {
-    "discovered_at": 1785392744.4317322,
-    "last_active": 1789618805.8974147,
-    "status": "WHITELIST"
-  },
-  "3gEUAty7Sn73ZmhGJmiYrhyn6s8meKLDZkUGt9iiMco1": {
-    "discovered_at": 1785390823.972513,
-    "last_active": 1785397730.4149957,
-    "status": "WHITELIST"
-  },
-  "7RtpGJC9L48WEgwheGoh7FmJqjzYchS4MrFWzv7FFcqf": {
-    "discovered_at": 1785449518.8022573,
-    "last_active": 1785521176.615215,
-    "status": "WHITELIST"
-  },
-  "BrKpX8Dm4crs4gmL1jbo2TRm2BFWLoJm8sUFtXST1rJo": {
-    "discovered_at": 1785450151.2504594,
-    "last_active": 1785521152.6385267,
-    "status": "WHITELIST"
-  },
-  "3VPNLiRd6tqx3pATwwSc42Esu5t4utkawtdnLhpoFR7w": {
-    "discovered_at": 1785451417.8416364,
-    "last_active": 1785521150.4142997,
-    "status": "WHITELIST"
-  },
-  "FuvFUjJK2vSytEnqZNwmXm56XvUHMH65PoFoK4QhL5Fs": {
-    "discovered_at": 1785454585.3278234,
-    "last_active": 1785521169.704911,
-    "status": "WHITELIST"
-  },
-  "CzdB5AJgMbtPykKyBBqXgv7gf3m8sJC4uzU4VegxgEjS": {
-    "discovered_at": 1785453318.7677648,
-    "last_active": 1785521008.9132771,
-    "status": "WHITELIST"
-  },
-  "5HsZjY3tEWkMfLXbvw1uFLc8DsTRL2RcaJHqag4rfwRL": {
-    "discovered_at": 1785449518.8022573,
-    "last_active": 1785521010.7246287,
-    "status": "WHITELIST"
-  },
-  "FxdjThiqoX1GnN8n6ApMbWEpqYLaYb3DdqfPiqXgNcfP": {
-    "discovered_at": 1785601523.5466726,
-    "last_active": 1787432244.6247385,
-    "status": "WHITELIST"
-  },
-  "TqYJ5jRUdogByktCjmvh5MojCqrgrDVWvYQQ9ubWXLf": {
-    "discovered_at": 1785908060.3861754,
-    "last_active": 1789617835.7137454,
-    "status": "WHITELIST"
-  },
-  "2o9UsXTRWZTfPt2mgTpUM5NcTCMKHsgox4nFdwTVdfks": {
-    "discovered_at": 1786294861.3682752,
-    "last_active": 1786822992.107464,
-    "status": "WHITELIST"
-  },
-  "FKfC594qUC7vXP4Qt1Ufk77mctU2Dfm2fryCqjee7GUv": {
-    "discovered_at": 1785464742.7221072,
-    "last_active": 1785464742.7221072,
-    "status": "WHITELIST"
-  },
-  "68YLQpg8dWrLXd5uQVKcXYQg5C9G8AWRuiALFvopVaqM": {
-    "discovered_at": 1785457123.2222857,
-    "last_active": 1785457123.2222857,
-    "status": "WHITELIST"
-  },
-  "5su2N1CCfuRstcLb63ycPfYGe5xgGvT3pRViTEDiUjKK": {
-    "discovered_at": 1785458390.7959135,
-    "last_active": 1785458390.7959135,
-    "status": "WHITELIST"
-  },
-  "78RV1NAWRAoYSwgvh1pQkXaD2MBki8WkAK5pYbxcwjLB": {
-    "discovered_at": 1785452685.4301233,
-    "last_active": 1785452685.4301233,
-    "status": "WHITELIST"
-  },
-  "4TkLACUnjFxkky3BrT4pVntSCeF6ewwyjbKZ1BApSQeY": {
-    "discovered_at": 1785463470.0781183,
-    "last_active": 1785463470.0781183,
-    "status": "WHITELIST"
-  },
-  "FSHQ4QUGXN5f5AaLcz928CWysCPEj52sACFP7DJs6phc": {
-    "discovered_at": 1785460293.1857,
-    "last_active": 1785460293.1857,
-    "status": "WHITELIST"
-  },
-  "GWPzBGNeCoF6ppZYv5CAvFrdXVpa7TZR9vJXbFSF2En7": {
-    "discovered_at": 1785466004.730807,
-    "last_active": 1785466004.730807,
-    "status": "WHITELIST"
-  },
-  "9bsUzhp8U5uivxU8MQBoc3sUD1AmLVnpEcn8AYmxE9Z5": {
-    "discovered_at": 1785450151.2504594,
-    "last_active": 1785450151.2504594,
-    "status": "WHITELIST"
-  },
-  "2yFvPtHKXskJLECSDAd9LfaxJfKKvbZiuaggvpjAfV8N": {
-    "discovered_at": 1785467905.46594,
-    "last_active": 1785467905.46594,
-    "status": "WHITELIST"
-  },
-  "GBQQT82f9RHx1e1uZ2gqVk2qAGw4iLAtvJNXhxZoeDzN": {
-    "discovered_at": 1785466637.4413583,
-    "last_active": 1785466637.4413583,
-    "status": "WHITELIST"
-  },
-  "F9jyrj5kzJ7aVzKciDFuX2UAz4yb8MQcuu1evHdn9Ufb": {
-    "discovered_at": 1786460302.5337818,
-    "last_active": 1789195863.1391122,
-    "status": "WHITELIST"
-  },
-  "HsAvZktLshkTR3e1dPuqqnkf8doTFfxoastoM37zGqyD": {
-    "discovered_at": 1786724799.7991486,
-    "last_active": 1789534976.0826383,
-    "status": "WHITELIST"
-  },
-  "7UYgUkAj2kuAthc7GH8jN8PwCnTJqZGBm42nS7bFwkgc": {
-    "discovered_at": 1786797570.8457336,
-    "last_active": 1789618780.0714872,
-    "status": "WHITELIST"
-  },
-  "AmYBAM9JFzLHX73yVYYxcivJaSt8jLj1CswhqGCnCtDo": {
-    "discovered_at": 1787047217.5295298,
-    "last_active": 1789573408.7593808,
-    "status": "WHITELIST"
-  },
-  "BnBSda7J69HD6afrPTT11wH7GNonWZo8RkRLTwEBzXHq": {
-    "discovered_at": 1787047218.700673,
-    "last_active": 1789599885.2252753,
-    "status": "WHITELIST"
-  },
-  "C32NsZNdQrrnJkNkHJUZCeP2XPgj5kPQgaXk5s1bssCb": {
-    "discovered_at": 1787047221.0472097,
-    "last_active": 1789613359.6950674,
-    "status": "WHITELIST"
-  },
-  "7A9s76P73ZoietfxBVxiuF77FfkprvGdsGL3KRt5p7AQ": {
-    "discovered_at": 1787225097.0118032,
-    "last_active": 1789567550.4435282,
-    "status": "WHITELIST"
-  },
-  "gtfoTELAeEZHUgHetA6umfsCETiBMzJCN4tB2sqCgFL": {
-    "discovered_at": 1787329097.7980928,
-    "last_active": 1789615581.4151602,
-    "status": "WHITELIST"
-  },
-  "8Lkre4wkjgkeirPsnbdvF545faGpqVp8yhA4aYNiQUAD": {
-    "discovered_at": 1787329099.5263326,
-    "last_active": 1789597397.5041869,
-    "status": "WHITELIST"
-  },
-  "J6ZMH3cXtL2UqrkFb6PKV4R5EMjyzbTArnPTnkjejiNr": {
-    "discovered_at": 1787329100.902824,
-    "last_active": 1789526027.7068744,
-    "status": "WHITELIST"
-  },
-  "35ymPRRC1cPRt3XtwE46o79t734k8ZyCmXDbiibNd3M4": {
-    "discovered_at": 1787329101.9525692,
-    "last_active": 1789616350.3039877,
-    "status": "WHITELIST"
-  },
-  "Hn2MNLTuPyjJdvLusDUV8nMBxykYHez2cjMdBajWmiRJ": {
-    "discovered_at": 1787329103.1659982,
-    "last_active": 1789617415.1226146,
-    "status": "WHITELIST"
-  },
-  "E7VuSENyVNGKd6GVUQnSZDRV8wBVtB5kTa1PkwJ2B1PP": {
-    "discovered_at": 1787480861.4549024,
-    "last_active": 1789604911.7096887,
-    "status": "WHITELIST"
-  },
-  "5Dib6bEKkg1C84aD8FbBoyk3k1zZSDtmkU2ypsCE9euY": {
-    "discovered_at": 1787480862.1431692,
-    "last_active": 1789617999.8031113,
-    "status": "WHITELIST"
-  },
-  "43NuJHyvehsGzMLxN7E7pkxCVv9YiVCPhk5RcLwfeMXy": {
-    "discovered_at": 1787657604.4391885,
-    "last_active": 1789474877.3869069,
-    "status": "WHITELIST"
-  },
-  "E7gozEiAPNhpJsdS52amhhN2XCAqLZa7WPrhyR6C8o4S": {
-    "discovered_at": 1787657605.1697023,
-    "last_active": 1789618780.0313718,
-    "status": "WHITELIST"
-  },
-  "4pk3EMPrhwUsQeU9T2AXY1oYSFW6FmKLcHBcqiLtGdsV": {
-    "discovered_at": 1787657606.2124748,
-    "last_active": 1789614423.4704618,
-    "status": "WHITELIST"
-  },
-  "6Nhm6mBE3z4Z1xjzNYZrAdQ59F3b1sRrNAj9FDGEtnkD": {
-    "discovered_at": 1787657609.5532227,
-    "last_active": 1789618400.3033576,
-    "status": "WHITELIST"
-  },
-  "5BzBjwiKz7tBn5sYA7KzqvwqCjYWdQKdFSirqFhNYJ3Q": {
-    "discovered_at": 1787657612.649527,
-    "last_active": 1789617879.4394135,
-    "status": "WHITELIST"
-  },
-  "46SF9LP2trK66kYJDao3vWbvyd5DZumxsfQXQEzgMxuH": {
-    "discovered_at": 1785391496.897422,
-    "last_active": 1789617316.3687794,
-    "status": "WHITELIST"
-  },
-  "4o2qZtZ8vkJu2yVDnLmJa9NtkTgrpaLinaQcT9VguDhi": {
-    "discovered_at": 1785397071.7799866,
-    "last_active": 1785397071.7799866,
-    "status": "WHITELIST"
-  },
-  "129TSboyowKPH4duNag1YJUByNxRVCraCcnHxd8G6cjg": {
-    "discovered_at": 1785457756.496397,
-    "last_active": 1785457756.496397,
-    "status": "WHITELIST"
-  },
-  "6hd8nJJycPbubxiQf4Eu3a8F28TvZ7t49XqWBn26AG8p": {
-    "discovered_at": 1785457756.496397,
-    "last_active": 1785457756.496397,
-    "status": "WHITELIST"
-  },
-  "CtSp1edDRPi1nSXNBM2r3G7zH6Jax5HohCp4WjBXgGco": {
-    "discovered_at": 1785455855.5463881,
-    "last_active": 1785455855.5463881,
-    "status": "WHITELIST"
-  },
-  "DoDQZTn6xYxBv4zVDHKagL1C3D373MTCxZL3PbLh3Gwr": {
-    "discovered_at": 1785455219.9034684,
-    "last_active": 1785455219.9034684,
-    "status": "WHITELIST"
-  },
-  "CFLkdFvpMmUesPskm36ZbvQvGWAwZRcjtb2avR13iv6B": {
-    "discovered_at": 1785455219.9034684,
-    "last_active": 1785455219.9034684,
-    "status": "WHITELIST"
-  },
-  "3c4j5pomg4ZqCnmyJdWt797asbKPrpYDfyC2aX9oX9Md": {
-    "discovered_at": 1785454585.3278234,
-    "last_active": 1785454585.3278234,
-    "status": "WHITELIST"
-  },
-  "919zPrC8e7JtJ99yFzNg3Z3arTXvhTAbjLspmTn9f3RH": {
-    "discovered_at": 1785452685.4301233,
-    "last_active": 1785452685.4301233,
-    "status": "WHITELIST"
-  },
-  "AjHVE8KWxY2SyKzZFEsjhvvSUQTnXnzn7zY77U1EoyNb": {
-    "discovered_at": 1785462199.900877,
-    "last_active": 1785462199.900877,
-    "status": "WHITELIST"
-  },
-  "3DpGT71vQLaiUvUzC5vtzgBDVSsYEranzb7YvsStHAtb": {
-    "discovered_at": 1785460928.9968226,
-    "last_active": 1785460928.9968226,
-    "status": "WHITELIST"
-  },
-  "9C2PstgB2kjzXD8WoJdLHAgfvoyuuwX78n9ed16X3dko": {
-    "discovered_at": 1785462834.7777734,
-    "last_active": 1785462834.7777734,
-    "status": "WHITELIST"
-  },
-  "pimcFbHeRQASqcYti5CqvAnhEcMUJUjDrCGuYbtugtS": {
-    "discovered_at": 1785459659.2238214,
-    "last_active": 1785459659.2238214,
-    "status": "WHITELIST"
-  },
-  "FhBvyZKPCPytexsMn4x3SKBiSRTm2pJggcBA6tdS6bDb": {
-    "discovered_at": 1785459024.7602582,
-    "last_active": 1785459024.7602582,
-    "status": "WHITELIST"
-  },
-  "EEW4SKNjuh2TCSemVAvGapZibXuoZRBUbnMJacbZycon": {
-    "discovered_at": 1788024031.5284953,
-    "last_active": 1788931306.754474,
-    "status": "WHITELIST"
-  },
-  "615szHoP3xhRZjFagPAxhYe1ESjHSyxMz25b9byxfHqj": {
-    "discovered_at": 1788024038.3693666,
-    "last_active": 1789617059.7151117,
-    "status": "WHITELIST"
-  },
-  "13yr2V4As4h59CmntBWa5HtXKz3DYEy2Sk3iZAChMhZj": {
-    "discovered_at": 1788024039.6441684,
-    "last_active": 1789499242.0135112,
-    "status": "WHITELIST"
-  },
-  "AE4MPGvpMeCA7MwUakAxAQZTzcijPAXcFsoAQmtLrL4V": {
-    "discovered_at": 1788153411.971902,
-    "last_active": 1789617115.1371324,
-    "status": "WHITELIST"
-  },
-  "J11QrwmNhbboxCLdEcHN5DDDtkDXPheE4htouLepbvVB": {
-    "discovered_at": 1788153412.7286959,
-    "last_active": 1789512338.8492684,
-    "status": "WHITELIST"
-  },
-  "3paByFyqER6Jm2gXjZVJheG3TaAy8f1ZfvpRK2SALRbj": {
-    "discovered_at": 1788179429.0137575,
-    "last_active": 1789518864.910458,
-    "status": "WHITELIST"
-  },
-  "2Gc9UTsoN24u4eSopvgfnFVNPDpqqdVQ711dQ7GMcSaW": {
-    "discovered_at": 1788229884.1242948,
-    "last_active": 1788445546.0113986,
-    "status": "WHITELIST"
-  },
-  "CEKZsasEhd7eTPyZMSahnHZrR9VsssbfjBUYaB6dkGFv": {
-    "discovered_at": 1788229885.5178385,
-    "last_active": 1789387093.9825275,
-    "status": "WHITELIST"
-  },
-  "4HbChpbhPi3GZotCUvu3TdwKMVDyjPMudjwYgq3bPcir": {
-    "discovered_at": 1787587420.6619651,
-    "last_active": 1787587420.6619651,
-    "status": "WHITELIST"
-  },
-  "3WoE2ksFk9i5c4tTTjPK9TsoyLaesA5aAuwrXJpjZtLM": {
-    "discovered_at": 1787599510.2035966,
-    "last_active": 1787599510.2035966,
-    "status": "WHITELIST"
-  },
-  "CVp8NFKGX8hUBkNibDj4ry2L5LRMiDCSbPGGQSHqdhRJ": {
-    "discovered_at": 1787584878.690443,
-    "last_active": 1787584878.690443,
-    "status": "WHITELIST"
-  },
-  "73DN6QLwBXBXQ5beSGXxekuXCEqrzKDoGXfCRaVhf5kP": {
-    "discovered_at": 1787547109.1255958,
-    "last_active": 1787547109.1255958,
-    "status": "WHITELIST"
-  },
-  "EGc1kPCM8JomyNxJvuA1qWpS7motYBiX61dPQpUNvcfb": {
-    "discovered_at": 1787616057.0387523,
-    "last_active": 1787616057.0387523,
-    "status": "WHITELIST"
-  },
-  "6wHwUy35bEf5usDQVoczjdpawakDBtRfCHgUdiPz18sE": {
-    "discovered_at": 1787577745.6425433,
-    "last_active": 1787577745.6425433,
-    "status": "WHITELIST"
-  },
-  "C1zw9mcbwT4s2n1wF6mFwTbVGq6TaPGfvNHBKaAG22dZ": {
-    "discovered_at": 1787605873.1543643,
-    "last_active": 1787605873.1543643,
-    "status": "WHITELIST"
-  },
-  "2GjMyU2yZA8nGwRLybNiBVv4UDnwo9xmBFqjdLoKBXCS": {
-    "discovered_at": 1787563696.405147,
-    "last_active": 1787563696.405147,
-    "status": "WHITELIST"
-  },
-  "5PWuAUdyhjktSpUpxG3E71kjpeWCmq2DJo69J1TBUMnc": {
-    "discovered_at": 1787586148.8522062,
-    "last_active": 1787586148.8522062,
-    "status": "WHITELIST"
-  },
-  "3afa9zQYwE7QV64tKdMA5QGKvaGLwvzPhDe1ciQjZv4G": {
-    "discovered_at": 1787607149.592277,
-    "last_active": 1787607149.592277,
-    "status": "WHITELIST"
-  },
-  "Fsf6XcjqvQEhoJ5psn3Fp7ypKZw3h1UwwUP5fQDQYKQj": {
-    "discovered_at": 1788058540.3462524,
-    "last_active": 1788058540.3462524,
-    "status": "WHITELIST"
-  },
-  "6orhR9PVUbft2ZRW8XJBQdJt7M1Txeky6GVdxVzRn82v": {
-    "discovered_at": 1788072578.2225099,
-    "last_active": 1788072578.2225099,
-    "status": "WHITELIST"
-  },
-  "BcGwoos5GGmkC5UNcTdvV8CqiDkY9ij5YqTW2SwwfoPe": {
-    "discovered_at": 1788054712.5482223,
-    "last_active": 1788054712.5482223,
-    "status": "WHITELIST"
-  },
-  "GYhyuXggpazFya7YAVYQtyUvRmJTfzkeJCskmXERXQ1D": {
-    "discovered_at": 1788055988.396491,
-    "last_active": 1788055988.396491,
-    "status": "WHITELIST"
-  },
-  "AQUwNs2us4GFqunmS4b7ZzU9p9Lhmyzf2GCnSNzTUf5t": {
-    "discovered_at": 1787897265.2620194,
-    "last_active": 1789616553.678432,
-    "status": "WHITELIST"
-  },
-  "CKGNk9gW7uGrB5gZrKEdck87wn5bhEgJsBYcaWEVb55r": {
-    "discovered_at": 1788076402.9211445,
-    "last_active": 1788076402.9211445,
-    "status": "WHITELIST"
-  },
-  "EEQCmGFfy3eG5daqopCRrvaNZvxL5ngHzQS7dT1RF8Zf": {
-    "discovered_at": 1788038746.192038,
-    "last_active": 1788038746.192038,
-    "status": "WHITELIST"
-  },
-  "3sgaLKn7ECztvpaHvF8pFcDjjmrPV1Ru5JGVs1nEpPHN": {
-    "discovered_at": 1786287769.1230772,
-    "last_active": 1789488819.7859797,
-    "status": "WHITELIST"
-  },
-  "EDA77wwnp3dZz8Dvw9HAK8wpQ1mFfzn2mF4sDEA8yXsy": {
-    "discovered_at": 1788416595.3033652,
-    "last_active": 1789257657.1157753,
-    "status": "WHITELIST"
-  },
-  "J7jaMgGYyXqy5X5f9ZUBcj4bvvWk2vL9heZePVGQNAkk": {
-    "discovered_at": 1788444591.8960414,
-    "last_active": 1789615291.3631396,
-    "status": "WHITELIST"
-  },
-  "DHv5f18TC5YzWwj6CArjrwGYhnQxu43cRtvHwr7H5XA8": {
-    "discovered_at": 1788503624.9503908,
-    "last_active": 1789619053.2230024,
-    "status": "WHITELIST"
-  },
-  "HwscN55CCJBjdGBCfZyL8Nqv991VVzwCTdjsFu197vnz": {
-    "discovered_at": 1788503625.672825,
-    "last_active": 1789601668.5595126,
-    "status": "WHITELIST"
-  },
-  "6egByXV8YqMwRZLdoBhnJ5ZBj9RSzkZUvwzZCYn7m5Dk": {
-    "discovered_at": 1788570677.2738621,
-    "last_active": 1788969618.9290545,
-    "status": "WHITELIST"
-  },
-  "BzNNTsonCsicfQHTKdyjyPQ2AxBTbfYBTBnMntAwsiz5": {
-    "discovered_at": 1788597763.981305,
-    "last_active": 1789619215.38482,
-    "status": "WHITELIST"
-  },
-  "9hgQyxdQQiaoxns8RBVu6zrtZLA1jKsbRYM3Hz9AaLDT": {
-    "discovered_at": 1788684810.952622,
-    "last_active": 1789613641.0294147,
-    "status": "WHITELIST"
-  },
-  "BQZvkxjyPJfMRyXn6ncJRMfyEF6ZvMFmKZXvgWt1iYa6": {
-    "discovered_at": 1788684811.6417902,
-    "last_active": 1789478203.0631013,
-    "status": "WHITELIST"
-  },
-  "9s6e4f2eYni3hURKfDkqfbPRCJwiXCGsSrjfoUiB9VoS": {
-    "discovered_at": 1788684813.289928,
-    "last_active": 1789619218.1192436,
-    "status": "WHITELIST"
-  },
-  "45ENVu4HRvCztyvN6S4E7uEpkAzUWq6TDSRYfETPfJmg": {
-    "discovered_at": 1788785288.626834,
-    "last_active": 1789585118.7337139,
-    "status": "WHITELIST"
-  },
-  "FSufq6umxcjJY3yxFjfJqoYFDndR4nPQcEMfwQUCuR79": {
-    "discovered_at": 1788785289.3241959,
-    "last_active": 1789618835.2364902,
-    "status": "WHITELIST"
-  },
-  "He5TP6oZo6ZZsXvS1R9NJJJ8BUAZ2Zc6rLsab4yiPkVR": {
-    "discovered_at": 1788785290.0171494,
-    "last_active": 1789597734.0566373,
-    "status": "WHITELIST"
-  },
   "3NRzXAZhkDwiq2aXSKJnY4QZnremVQfwtsMmoh4tYQoJ": {
-    "discovered_at": 1788840457.9952745,
-    "last_active": 1789573969.7876565,
-    "status": "WHITELIST"
-  },
-  "6kzsXq32zgmW1cEw9xKn9HyfE72oUX9b8PiPBZ8fWn9S": {
-    "discovered_at": 1788925932.287562,
-    "last_active": 1789616152.7988079,
-    "status": "WHITELIST"
-  },
-  "AHCpuhcBQ2RC23vGsf7AfzfnjZaxfUVj2PjndYsEDNP": {
-    "discovered_at": 1788947142.9567983,
-    "last_active": 1789612555.5791914,
-    "status": "WHITELIST"
-  },
-  "A6PSQFRfv93hoAn1LhQGRT2dYQtjDKX6SE2vN9MEvbot": {
-    "discovered_at": 1789134690.872118,
-    "last_active": 1789610731.3324778,
-    "status": "WHITELIST"
-  },
-  "Awzkv3caFa7qDEK3GFQieR4WDgXcQmNmcigw7CihfYoc": {
-    "discovered_at": 1789150773.9638157,
-    "last_active": 1789598349.7127438,
-    "status": "WHITELIST"
-  },
-  "H44zceMf6tP8cH6NGcKov2nNjGWrtC7a1LEVRNBvcaPf": {
-    "discovered_at": 1789150774.698356,
-    "last_active": 1789619060.7591536,
-    "status": "WHITELIST"
-  },
-  "8p4FzY2KRwoWzaWCuYuBXgSPDNnjr9gian2hpNwwCTFs": {
-    "discovered_at": 1789150775.4252527,
-    "last_active": 1789618945.9852076,
-    "status": "WHITELIST"
-  },
-  "J56M2D9BeigqKVTNGSegVho8s8d9XtFueFDurN5z9Fxf": {
-    "discovered_at": 1789218282.8616083,
-    "last_active": 1789571123.0164096,
-    "status": "WHITELIST"
-  },
-  "B9d5N2EKKeXWH9nu5xAnUcKZkXDjure99A35TDCoYCSW": {
-    "discovered_at": 1789370261.6622,
-    "last_active": 1789614604.3669822,
-    "status": "WHITELIST"
-  },
-  "6kyf6wyxsJejHxHVKoDxyTmU2x4FgPzoVdkLtL52Ersy": {
-    "discovered_at": 1789370262.4512832,
-    "last_active": 1789598349.6857784,
-    "status": "WHITELIST"
-  },
-  "GqanDXxavK8VCV2qSZ7pS7FUUNh58j22rwjTCtBtm88o": {
-    "discovered_at": 1789370263.1945627,
-    "last_active": 1789598350.4579744,
-    "status": "WHITELIST"
-  },
-  "FNeVJWWsSDoXvmL7CEFrxo7nThBbvz14hWPEG3z3qeT2": {
-    "discovered_at": 1789370263.9682233,
-    "last_active": 1789598349.7518315,
-    "status": "WHITELIST"
-  },
-  "AJLk9wbbPhk6LN3dNW5vSf8Wx3McAWsacGd1YgHHo3f6": {
-    "discovered_at": 1789400620.2538288,
-    "last_active": 1789598349.7780023,
-    "status": "WHITELIST"
-  },
-  "BA5h9CoAQ6s5RKwuLrJR47zLWDmFaW7d1hJ1M8p4cyiS": {
-    "discovered_at": 1789400620.9660256,
-    "last_active": 1789615518.632488,
-    "status": "WHITELIST"
-  },
-  "Eu1KU118rGQEAMnV5uXojfdx6nhozSgNr4Fhxi2suxHB": {
-    "discovered_at": 1789463515.7321165,
-    "last_active": 1789531201.8725104,
-    "status": "WHITELIST"
-  },
-  "6FpZdYmBtbXCCAYUpAJ6qE812wz87tcEyRvTUa8U5Nsd": {
-    "discovered_at": 1789542383.6276748,
-    "last_active": 1789619225.6188898,
-    "status": "WHITELIST"
-  },
-  "23smoGAtYeEHjdbyXUSZFWkEjP8oDf92UwNnnXp1a91w": {
-    "discovered_at": 1789578245.8111153,
-    "last_active": 1789598349.7255101,
-    "status": "WHITELIST"
-  },
-  "8hKS83ezrd7pVDZfWYqpDEUsC52MH4u7MjUV9FU8Zjxb": {
-    "discovered_at": 1789578246.5646307,
-    "last_active": 1789589012.2178502,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 130.0,
+    "winrate_7d": 60.0,
+    "profit_7d": 30547.47,
+    "trades_7d": 146,
+    "tags": [
+      "smart_degen",
+      "gmgn"
+    ]
   },
   "AdKiZFt1EsGTApV7KuuSeqLRJdZwtD79TmQRg9mD1HZJ": {
-    "discovered_at": 1789619372.8717303,
-    "last_active": 1789619389.706641,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 122.32,
+    "winrate_7d": 100.0,
+    "profit_7d": 1160.9,
+    "trades_7d": 51,
+    "tags": [
+      "smart_degen",
+      "axiom"
+    ]
   },
-  "Cs1pTXxR2hcWgd5vRzA7APyrRRuRQTU14X6UPkNE6V43": {
-    "discovered_at": 1789619373.618998,
-    "last_active": 1789619373.618998,
-    "status": "WHITELIST"
+  "GqanDXxavK8VCV2qSZ7pS7FUUNh58j22rwjTCtBtm88o": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 115.03,
+    "winrate_7d": 58.3,
+    "profit_7d": 18349.74,
+    "trades_7d": 165,
+    "tags": [
+      "smart_degen"
+    ]
+  },
+  "J6ZMH3cXtL2UqrkFb6PKV4R5EMjyzbTArnPTnkjejiNr": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 114.99,
+    "winrate_7d": 100.0,
+    "profit_7d": 1246.02,
+    "trades_7d": 25,
+    "tags": [
+      "smart_degen"
+    ]
+  },
+  "Awzkv3caFa7qDEK3GFQieR4WDgXcQmNmcigw7CihfYoc": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 114.52,
+    "winrate_7d": 62.5,
+    "profit_7d": 16009.28,
+    "trades_7d": 124,
+    "tags": [
+      "smart_degen"
+    ]
+  },
+  "23smoGAtYeEHjdbyXUSZFWkEjP8oDf92UwNnnXp1a91w": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 113.46,
+    "winrate_7d": 56.5,
+    "profit_7d": 18470.54,
+    "trades_7d": 175,
+    "tags": [
+      "smart_degen"
+    ]
+  },
+  "EEQCmGFfy3eG5daqopCRrvaNZvxL5ngHzQS7dT1RF8Zf": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 108.29,
+    "winrate_7d": 100.0,
+    "profit_7d": 1642.91,
+    "trades_7d": 10,
+    "tags": []
+  },
+  "6orhR9PVUbft2ZRW8XJBQdJt7M1Txeky6GVdxVzRn82v": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 107.8,
+    "winrate_7d": 100.0,
+    "profit_7d": 648.0,
+    "trades_7d": 13,
+    "tags": []
+  },
+  "CKGNk9gW7uGrB5gZrKEdck87wn5bhEgJsBYcaWEVb55r": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 107.3,
+    "winrate_7d": 100.0,
+    "profit_7d": 1149.16,
+    "trades_7d": 10,
+    "tags": []
+  },
+  "Fsf6XcjqvQEhoJ5psn3Fp7ypKZw3h1UwwUP5fQDQYKQj": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 103.75,
+    "winrate_7d": 100.0,
+    "profit_7d": 376.26,
+    "trades_7d": 6,
+    "tags": []
+  },
+  "GYhyuXggpazFya7YAVYQtyUvRmJTfzkeJCskmXERXQ1D": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 103.44,
+    "winrate_7d": 100.0,
+    "profit_7d": 718.56,
+    "trades_7d": 4,
+    "tags": []
+  },
+  "BcGwoos5GGmkC5UNcTdvV8CqiDkY9ij5YqTW2SwwfoPe": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 102.81,
+    "winrate_7d": 100.0,
+    "profit_7d": 655.84,
+    "trades_7d": 3,
+    "tags": []
+  },
+  "3paByFyqER6Jm2gXjZVJheG3TaAy8f1ZfvpRK2SALRbj": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 102.39,
+    "winrate_7d": 100.0,
+    "profit_7d": 446.18,
+    "trades_7d": 3,
+    "tags": [
+      "smart_degen",
+      "photon"
+    ]
+  },
+  "B9d5N2EKKeXWH9nu5xAnUcKZkXDjure99A35TDCoYCSW": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1789707012.2777407,
+    "status": "WHITELIST",
+    "alpha_score": 102.14,
+    "winrate_7d": 75.0,
+    "profit_7d": 3570.89,
+    "trades_7d": 160,
+    "tags": [
+      "smart_degen",
+      "photon"
+    ]
+  },
+  "FNeVJWWsSDoXvmL7CEFrxo7nThBbvz14hWPEG3z3qeT2": {
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 101.33,
+    "winrate_7d": 55.6,
+    "profit_7d": 12887.33,
+    "trades_7d": 88,
+    "tags": [
+      "smart_degen"
+    ]
+  },
+  "8p4FzY2KRwoWzaWCuYuBXgSPDNnjr9gian2hpNwwCTFs": {
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 99.27,
+    "winrate_7d": 74.4,
+    "profit_7d": 2457.28,
+    "trades_7d": 157,
+    "tags": [
+      "smart_degen",
+      "photon"
+    ]
+  },
+  "H44zceMf6tP8cH6NGcKov2nNjGWrtC7a1LEVRNBvcaPf": {
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 95.82,
+    "winrate_7d": 50.0,
+    "profit_7d": 12907.63,
+    "trades_7d": 62,
+    "tags": [
+      "smart_degen",
+      "photon"
+    ]
+  },
+  "6kzsXq32zgmW1cEw9xKn9HyfE72oUX9b8PiPBZ8fWn9S": {
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 95.48,
+    "winrate_7d": 77.8,
+    "profit_7d": 3101.08,
+    "trades_7d": 23,
+    "tags": [
+      "smart_degen",
+      "photon"
+    ]
+  },
+  "6FpZdYmBtbXCCAYUpAJ6qE812wz87tcEyRvTUa8U5Nsd": {
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 86.56,
+    "winrate_7d": 65.4,
+    "profit_7d": 585.51,
+    "trades_7d": 123,
+    "tags": [
+      "smart_degen",
+      "axiom"
+    ]
+  },
+  "5Dib6bEKkg1C84aD8FbBoyk3k1zZSDtmkU2ypsCE9euY": {
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 76.24,
+    "winrate_7d": 55.0,
+    "profit_7d": 620.15,
+    "trades_7d": 79,
+    "tags": [
+      "smart_degen",
+      "gmgn_go",
+      "gmgn"
+    ]
   },
   "BumkaFdBaQp4TBCbgtLzMfS7nJALjBfEyyXmGrWZAtzL": {
-    "discovered_at": 1789314832.0250947,
-    "last_active": 1789314832.0250947,
-    "status": "WHITELIST"
-  },
-  "FqSHNiEoK6YmKkxLNWHRxHMDMNRZ4ohn7HZ9k3pfpNHd": {
-    "discovered_at": 1789264962.5916123,
-    "last_active": 1789264962.5916123,
-    "status": "WHITELIST"
-  },
-  "D1FeBLsMQccjPVxzHHA8fYuPfLCJp1iJF1TQM9n5Fxrh": {
-    "discovered_at": 1789451236.8086116,
-    "last_active": 1789451236.8086116,
-    "status": "WHITELIST"
-  },
-  "ESZpezEWREmzxQGiudDCaE6ayHq6uWWeSCnQZruwUfU9": {
-    "discovered_at": 1789319303.5483027,
-    "last_active": 1789319303.5483027,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 155.22,
+    "winrate_7d": 100.0,
+    "profit_7d": 17611.02,
+    "trades_7d": 40,
+    "tags": []
   },
   "8km1baLbEpaW9ZUSF7UwkyjspfGHjSgKE78mK7zXnqW1": {
-    "discovered_at": 1789236823.5778909,
-    "last_active": 1789236823.5778909,
-    "status": "WHITELIST"
-  },
-  "DRaeXwbjTFYDskjzsMASbTWx3NKZy631BpuCiupj5233": {
-    "discovered_at": 1789127404.2510185,
-    "last_active": 1789127404.2510185,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 128.25,
+    "winrate_7d": 100.0,
+    "profit_7d": 5625.99,
+    "trades_7d": 34,
+    "tags": []
   },
   "BE4jTxzVqJckkiQ1n1A8ELNfenzu7UNw4cChWiHkAKCb": {
-    "discovered_at": 1789266240.237606,
-    "last_active": 1789266240.237606,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 125.38,
+    "winrate_7d": 100.0,
+    "profit_7d": 2691.35,
+    "trades_7d": 44,
+    "tags": []
   },
   "9D9pGaHrXxGjAsjQEdn4uXpJuCHXxf18pmDJWzLrrXw8": {
-    "discovered_at": 1789245778.1323583,
-    "last_active": 1789245778.1323583,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 124.44,
+    "winrate_7d": 100.0,
+    "profit_7d": 2217.9,
+    "trades_7d": 42,
+    "tags": []
   },
   "BikvfWSsiCKf16z4TfsWtatt73JVHChJouyL8rDh6uG8": {
-    "discovered_at": 1789267513.0524287,
-    "last_active": 1789267513.0524287,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 122.52,
+    "winrate_7d": 100.0,
+    "profit_7d": 1260.12,
+    "trades_7d": 49,
+    "tags": []
   },
   "FBcdJdiy3iEEtGQbneu7uDKeqNV8CRjSCmPuZD4kMUhX": {
-    "discovered_at": 1789252155.7339692,
-    "last_active": 1789252155.7339692,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 121.95,
+    "winrate_7d": 100.0,
+    "profit_7d": 2222.88,
+    "trades_7d": 35,
+    "tags": []
   },
   "3tMwy8RpGGQSmxLJFJfGikdv1xzwvAk4Q5QEQVnGTsro": {
-    "discovered_at": 1789293174.529003,
-    "last_active": 1789293174.529003,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 121.88,
+    "winrate_7d": 100.0,
+    "profit_7d": 941.29,
+    "trades_7d": 46,
+    "tags": []
   },
   "8ju7WntcHzoc9uFfvEGMHLVk3N1TS3MSB3p9vRU7eNdH": {
-    "discovered_at": 1789248963.2045984,
-    "last_active": 1789248963.2045984,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 121.53,
+    "winrate_7d": 100.0,
+    "profit_7d": 2264.11,
+    "trades_7d": 34,
+    "tags": []
   },
   "6BKeq5SX7ahVttRYx72ohRVDi8mcmxsX8gLcvbTU73FF": {
-    "discovered_at": 1789258528.1771145,
-    "last_active": 1789258528.1771145,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 121.46,
+    "winrate_7d": 100.0,
+    "profit_7d": 729.87,
+    "trades_7d": 42,
+    "tags": []
   },
   "FrmgxEsq7RjCttKSXLSJvJAYvbucC6GuAcCm6iqyMKj7": {
-    "discovered_at": 1789248963.2045984,
-    "last_active": 1789248963.2045984,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 121.38,
+    "winrate_7d": 100.0,
+    "profit_7d": 689.07,
+    "trades_7d": 58,
+    "tags": []
   },
   "3Mv1gMJDzTn5uuss11bYq4C9dLoUJC1gorn5J3DYpw9h": {
-    "discovered_at": 1789268789.0400026,
-    "last_active": 1789268789.0400026,
-    "status": "WHITELIST"
-  },
-  "9esxU3F5KeAAf3HwqQriwYnhiGB3arj3mmjhtJu1nM6e": {
-    "discovered_at": 1789224640.807716,
-    "last_active": 1789224640.807716,
-    "status": "WHITELIST"
-  },
-  "CYJ74h3SD59JsqYvMBtJEcycbeVXwY8yjJ8RA3G5RmLJ": {
-    "discovered_at": 1789285471.3835948,
-    "last_active": 1789285471.3835948,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 121.1,
+    "winrate_7d": 100.0,
+    "profit_7d": 547.54,
+    "trades_7d": 66,
+    "tags": []
   },
   "DkxMys3jfNRM4TLjAmo9YjpQjtn3uK48Hs8ECC8tYvTU": {
-    "discovered_at": 1789221436.2163587,
-    "last_active": 1789221436.2163587,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 119.59,
+    "winrate_7d": 100.0,
+    "profit_7d": 1543.87,
+    "trades_7d": 33,
+    "tags": []
   },
   "9TR5qhUnoHUe9BE9fhyHuHzVPacuxJDFGF55hsuCNa2w": {
-    "discovered_at": 1789270074.8677876,
-    "last_active": 1789270074.8677876,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 118.14,
+    "winrate_7d": 100.0,
+    "profit_7d": 571.0,
+    "trades_7d": 34,
+    "tags": []
   },
   "FGd1xce1nZ97k9SQEcbWtN5rMq9yuhYSTZz3CwSRRySR": {
-    "discovered_at": 1789264962.5916123,
-    "last_active": 1789264962.5916123,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 118.11,
+    "winrate_7d": 100.0,
+    "profit_7d": 555.3,
+    "trades_7d": 34,
+    "tags": []
   },
   "4mtzY81Z3DxksKihLcDJkbBD3tSfwfcMT9n1Mzr4v8Cp": {
-    "discovered_at": 1789234901.3089738,
-    "last_active": 1789234901.3089738,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 117.6,
+    "winrate_7d": 100.0,
+    "profit_7d": 2048.39,
+    "trades_7d": 27,
+    "tags": []
   },
   "9XHojTgZgVaoQteFY1cTY7wAymARvtXficEszNnaUejB": {
-    "discovered_at": 1789259184.3204644,
-    "last_active": 1789259184.3204644,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 117.34,
+    "winrate_7d": 100.0,
+    "profit_7d": 2168.8,
+    "trades_7d": 26,
+    "tags": []
   },
   "3bVSJFiwnYSZ3JnaeRm6DVYNGVmWGVz74ppXfAtHEDbb": {
-    "discovered_at": 1789262408.429586,
-    "last_active": 1789262408.429586,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 117.15,
+    "winrate_7d": 100.0,
+    "profit_7d": 1576.53,
+    "trades_7d": 28,
+    "tags": []
   },
   "5qDo63wk8jgajVuxsGDmvNzTy7zpR9jpdasxGPrTUk4R": {
-    "discovered_at": 1789269431.061447,
-    "last_active": 1789269431.061447,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 116.42,
+    "winrate_7d": 100.0,
+    "profit_7d": 2958.81,
+    "trades_7d": 21,
+    "tags": []
   },
   "EPVRKbsxvxnL2W582qXEcuPSqsBtzusqSbj23zwFABgZ": {
-    "discovered_at": 1789255983.0571866,
-    "last_active": 1789255983.0571866,
-    "status": "WHITELIST"
-  },
-  "FTk8YDDff8dS5vFoZjqZ9xWJ8ZpZA2qt3hGDsghY8qaf": {
-    "discovered_at": 1789266879.1978784,
-    "last_active": 1789266879.1978784,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 116.29,
+    "winrate_7d": 100.0,
+    "profit_7d": 1396.95,
+    "trades_7d": 27,
+    "tags": []
   },
   "3o6fL4bDxnKourCikX13xDRKFwa9SFzA6wGp2VTYXyWQ": {
-    "discovered_at": 1789270714.005908,
-    "last_active": 1789270714.005908,
-    "status": "WHITELIST"
-  },
-  "4msYLZZUtnbb9vx8sQNHftqBJ8nAbQkDQVYKg7kfKkhx": {
-    "discovered_at": 1789263686.7554634,
-    "last_active": 1789263686.7554634,
-    "status": "WHITELIST"
-  },
-  "3xBmQQijfUghKXmnvjUKFEwrobxV2gmz2mYvFPoLoG4C": {
-    "discovered_at": 1789397029.4613414,
-    "last_active": 1789397029.4613414,
-    "status": "WHITELIST"
-  },
-  "8pdAQ1DMgNvg1k95oMYvnJEmiZhwEFMRyE5ixkjLmXqN": {
-    "discovered_at": 1789193787.1146798,
-    "last_active": 1789193787.1146798,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 114.68,
+    "winrate_7d": 100.0,
+    "profit_7d": 842.16,
+    "trades_7d": 26,
+    "tags": []
   },
   "7QzcsCk5c9cLVf5W1vzEBwJ2vWDiLnA6ySYFxivNsXrg": {
-    "discovered_at": 1789273292.619727,
-    "last_active": 1789273292.619727,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 113.57,
+    "winrate_7d": 100.0,
+    "profit_7d": 1037.46,
+    "trades_7d": 23,
+    "tags": []
   },
   "4ZKhvUwpSgpVhYFwHfkoVKn7gMmYpS5ovxr4Zi5qjfcB": {
-    "discovered_at": 1789268152.5731552,
-    "last_active": 1789268152.5731552,
-    "status": "WHITELIST"
-  },
-  "G3h5YQA4iE7ozj3MvasAxdkpzx7G7sS8zg7yLR44vZJu": {
-    "discovered_at": 1789246413.237071,
-    "last_active": 1789246413.237071,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 113.33,
+    "winrate_7d": 100.0,
+    "profit_7d": 665.41,
+    "trades_7d": 24,
+    "tags": []
   },
   "99wx1wsmSpPhNg2gwDarvmYdoF57YDDjKLBF8Mawq1su": {
-    "discovered_at": 1789256619.907967,
-    "last_active": 1789256619.907967,
-    "status": "WHITELIST"
-  },
-  "EPRP79ASPknyhdtRa6yA3mwd767ajtwfsdiUix1SnuL8": {
-    "discovered_at": 1789304644.3574703,
-    "last_active": 1789304644.3574703,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 112.81,
+    "winrate_7d": 100.0,
+    "profit_7d": 654.73,
+    "trades_7d": 23,
+    "tags": []
   },
   "CtXTohdV2SfBKmnJJYZS8BWjJQY7VLDJ5yB9Mw1hpwor": {
-    "discovered_at": 1789298918.3515248,
-    "last_active": 1789298918.3515248,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 112.44,
+    "winrate_7d": 100.0,
+    "profit_7d": 718.13,
+    "trades_7d": 22,
+    "tags": []
   },
   "J2RS9gFJDUZX1B13haaFpziNYPChcFidF7fESXSvAiL2": {
-    "discovered_at": 1789276495.9599736,
-    "last_active": 1789276495.9599736,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 112.4,
+    "winrate_7d": 100.0,
+    "profit_7d": 1449.5,
+    "trades_7d": 19,
+    "tags": []
   },
   "AuswVnP9KqxA55Jd46qyH5KkstUQ1CQmioxdtwNb3keR": {
-    "discovered_at": 1789279050.7361119,
-    "last_active": 1789279050.7361119,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 112.28,
+    "winrate_7d": 100.0,
+    "profit_7d": 889.65,
+    "trades_7d": 21,
+    "tags": []
   },
   "AMzfpcwtQWctD2WJq9YVQ7ymJ4hmibakFTtRiPbdicbD": {
-    "discovered_at": 1789280329.6719146,
-    "last_active": 1789280329.6719146,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 112.11,
+    "winrate_7d": 100.0,
+    "profit_7d": 803.19,
+    "trades_7d": 21,
+    "tags": []
   },
   "6DvDxkj2hpz5KBeVJVEjeGjuJUUtLb1zXUq7XHTyapxK": {
-    "discovered_at": 1789255334.845767,
-    "last_active": 1789255334.845767,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 110.79,
+    "winrate_7d": 100.0,
+    "profit_7d": 894.65,
+    "trades_7d": 18,
+    "tags": []
   },
   "ANdySMMUkA5Ni5VQj7HJeeLMxxgGkQH6qKooW8d4bCba": {
-    "discovered_at": 1789393199.3558085,
-    "last_active": 1789393199.3558085,
-    "status": "WHITELIST"
-  },
-  "ArrcGfTPPcw35vWwyLMjpysRid6vJ8PK4T9dwTuXCijn": {
-    "discovered_at": 1789225936.2364552,
-    "last_active": 1789225936.2364552,
-    "status": "WHITELIST"
-  },
-  "kKp8nvVT1tp6bM8qckhUYrdro32y7UJimsXXKDLV17K": {
-    "discovered_at": 1789284191.0089068,
-    "last_active": 1789284191.0089068,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 110.45,
+    "winrate_7d": 100.0,
+    "profit_7d": 723.28,
+    "trades_7d": 18,
+    "tags": []
   },
   "D9tWws1RPWDTjfPV98KLmnpNCCxMw1MfGFAa94E4kyAd": {
-    "discovered_at": 1789282257.4788659,
-    "last_active": 1789282257.4788659,
-    "status": "WHITELIST"
-  },
-  "94Z4Sdxk2JAoExTWEY8TQcqx61BArpMneKqTE2RkKe5T": {
-    "discovered_at": 1789220798.0633621,
-    "last_active": 1789220798.0633621,
-    "status": "WHITELIST"
-  },
-  "4xpHRHEKhA8Nsb1inqBUPHp2VVQkvyC4AB4ae2iw7dFD": {
-    "discovered_at": 1789283543.449696,
-    "last_active": 1789283543.449696,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 109.05,
+    "winrate_7d": 100.0,
+    "profit_7d": 1525.15,
+    "trades_7d": 12,
+    "tags": []
   },
   "6RHwx1SrmJBt7w4yKVSwmiNug736rCiqo6fmz4vWfZfT": {
-    "discovered_at": 1789294462.2942386,
-    "last_active": 1789294462.2942386,
-    "status": "WHITELIST"
-  },
-  "Fa9ouwu1oykYWBUocNmZ1KmWQvCCaRsfC4np7KukTiZP": {
-    "discovered_at": 1789247049.9210641,
-    "last_active": 1789247049.9210641,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 107.2,
+    "winrate_7d": 100.0,
+    "profit_7d": 851.78,
+    "trades_7d": 11,
+    "tags": []
   },
   "8UtsUVtWT62KtxZQLZvu94GhkXJVq7dosjvPMdY6tnq8": {
-    "discovered_at": 1789263686.7554634,
-    "last_active": 1789263686.7554634,
-    "status": "WHITELIST"
-  },
-  "4trfWuPaKcj3o9gYYg8LPCdU3WnBGMefK9W6mwTSx95q": {
-    "discovered_at": 1789196989.5044312,
-    "last_active": 1789196989.5044312,
-    "status": "WHITELIST"
-  },
-  "CYTh1Ecza543PU2UWB2eXGwzdEXwBuCM3Nd9DpSKkRT3": {
-    "discovered_at": 1789347303.1905127,
-    "last_active": 1789347303.1905127,
-    "status": "WHITELIST"
-  },
-  "5nShkkJc3FpRmJyWt1eANDSgCL6qTQD37cVfjn2nkz4r": {
-    "discovered_at": 1789288680.842159,
-    "last_active": 1789288680.842159,
-    "status": "WHITELIST"
-  },
-  "HPrdvSh7TecvFYDA34Yv4tbneG5YoxemttnSaVdawG26": {
-    "discovered_at": 1789231713.3846977,
-    "last_active": 1789231713.3846977,
-    "status": "WHITELIST"
-  },
-  "8PxtaSdubBSQqYrovbdLyTPdE1Hj6LEwcMkRvCpvrqu1": {
-    "discovered_at": 1789522506.9461849,
-    "last_active": 1789522506.9461849,
-    "status": "WHITELIST"
-  },
-  "DxRgxbDHwTAcfMFMXUhLs5ABuYWo3ap6XrBTgXjrcZcw": {
-    "discovered_at": 1789232349.3262932,
-    "last_active": 1789232349.3262932,
-    "status": "WHITELIST"
-  },
-  "6ib7sk33BRKb6yuHfpBrmsGwV9eQY6oJKE3GPbnBDBvD": {
-    "discovered_at": 1789277773.0493898,
-    "last_active": 1789277773.0493898,
-    "status": "WHITELIST"
-  },
-  "FfosoQJuE1hoK8KqX4SySc8FP5e5ticf36yidVZRfx97": {
-    "discovered_at": 1789223357.6563523,
-    "last_active": 1789223357.6563523,
-    "status": "WHITELIST"
-  },
-  "CsVD31gaPrnbJScLPbR2US5ou8oC1vaHhnFY9YHcG8pb": {
-    "discovered_at": 1789240663.8013935,
-    "last_active": 1789240663.8013935,
-    "status": "WHITELIST"
-  },
-  "Hp1p5hDMJByUvU4HUpsAmQuBs5pCoXsA92t71wxPk4QS": {
-    "discovered_at": 1789225936.2364552,
-    "last_active": 1789225936.2364552,
-    "status": "WHITELIST"
-  },
-  "Gx5PERSyERbDH4sXnJuUtLGxDZz3spawjgd5xsCMWy5u": {
-    "discovered_at": 1789072642.6241958,
-    "last_active": 1789072642.6241958,
-    "status": "WHITELIST"
-  },
-  "eN7A1SbFeWo8yYpgtoZDWGZXjZsxaf52fpFFrnJUDwx": {
-    "discovered_at": 1789234901.3089738,
-    "last_active": 1789234901.3089738,
-    "status": "WHITELIST"
-  },
-  "H58NhTNB4mLL3g6c72j8jy4tTxK3ZhuPGtMkJSj4JFBm": {
-    "discovered_at": 1789125499.2936726,
-    "last_active": 1789125499.2936726,
-    "status": "WHITELIST"
-  },
-  "3kd3FCqeNfutepAJ7iezMMFRVBPG8a3twMCcqNWFP3cK": {
-    "discovered_at": 1789425622.989424,
-    "last_active": 1789425622.989424,
-    "status": "WHITELIST"
-  },
-  "8BoMfy1hA7xQEw36ECHxz9HoQgpfuKcHksrwxyZnGXQ5": {
-    "discovered_at": 1789280329.6719146,
-    "last_active": 1789280329.6719146,
-    "status": "WHITELIST"
-  },
-  "64vorGqwjHjrbwvwFT2EHeTMvMS8Rfc5a5b1aomtVVXY": {
-    "discovered_at": 1789279690.4938507,
-    "last_active": 1789279690.4938507,
-    "status": "WHITELIST"
-  },
-  "9m36CXKsFymfXV1r41T72X1sJqGmHgWaTMGxb4Fsrhxk": {
-    "discovered_at": 1789331411.9341967,
-    "last_active": 1789331411.9341967,
-    "status": "WHITELIST"
-  },
-  "CXViVGNPnToHtLuj5vpN1kYULDSpWrrQi6EqEpR9u75S": {
-    "discovered_at": 1789340954.9525952,
-    "last_active": 1789340954.9525952,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 105.8,
+    "winrate_7d": 100.0,
+    "profit_7d": 651.56,
+    "trades_7d": 9,
+    "tags": []
   },
   "HEnrSgd4MSMFguBcARMv2FQVQBomT8TLqyYJuR7iBaHW": {
-    "discovered_at": 1789375312.126007,
-    "last_active": 1789375312.126007,
-    "status": "WHITELIST"
-  },
-  "yNeuVRWmTMzB9yMZqwacbtnWuPjyhQNdWCYGBVdpco5": {
-    "discovered_at": 1789193151.789206,
-    "last_active": 1789193151.789206,
-    "status": "WHITELIST"
-  },
-  "Q76HQgQDZzv6wp3qMTzJKTrZrinpec9TofcveYs1DQh": {
-    "discovered_at": 1789266879.1978784,
-    "last_active": 1789266879.1978784,
-    "status": "WHITELIST"
-  },
-  "3bvJkELk93WVope5kVbvEexiwg9o4eGv6s33ztE432dQ": {
-    "discovered_at": 1789417941.5491514,
-    "last_active": 1789417941.5491514,
-    "status": "WHITELIST"
-  },
-  "7Uf4rLYsPHjeEmisaDBLTfkd6LHnUXhxqwEFrEwTdx6f": {
-    "discovered_at": 1789479915.6691692,
-    "last_active": 1789479915.6691692,
-    "status": "WHITELIST"
-  },
-  "9pVQzkPxVBqJRAWoc5PjSBcvqkP6xDFyfp1LRbBxaJiL": {
-    "discovered_at": 1789076459.084783,
-    "last_active": 1789076459.084783,
-    "status": "WHITELIST"
-  },
-  "D8zVnPNH4WhSdWWfFZj27MoCzyJnr2PCT7kmQWaNLZBK": {
-    "discovered_at": 1789313550.9157956,
-    "last_active": 1789313550.9157956,
-    "status": "WHITELIST"
-  },
-  "2bLF1VExka6BCpPaqCUcaqvJTpMTkVGq2th4tAt9pomC": {
-    "discovered_at": 1789389992.8311374,
-    "last_active": 1789389992.8311374,
-    "status": "WHITELIST"
-  },
-  "EeUJMTrQuytVciiTFwd42X8q6Btm6eoovDfzF9CXxt1Q": {
-    "discovered_at": 1789405097.178114,
-    "last_active": 1789405097.178114,
-    "status": "WHITELIST"
-  },
-  "Fk86rQGCtDhNVuXzB7Ynha4XrorvyQGqae3oVRXSAUFL": {
-    "discovered_at": 1789540279.1431842,
-    "last_active": 1789540279.1431842,
-    "status": "WHITELIST"
-  },
-  "AsWPzEc5wELkL6o8hBMF6sygZ3NBpDSk24Dewi7kxUtx": {
-    "discovered_at": 1789478636.7789621,
-    "last_active": 1789478636.7789621,
-    "status": "WHITELIST"
-  },
-  "Ec3199ehft9YpUfhoN7n2jPvjaRL961BJrifRVrxcxpa": {
-    "discovered_at": 1789397029.4613414,
-    "last_active": 1789397029.4613414,
-    "status": "WHITELIST"
-  },
-  "4XbuWMq7zKv47c6hvkcfnxGXXinWXcGGbK52xSGH2E5L": {
-    "discovered_at": 1789400223.2426836,
-    "last_active": 1789400223.2426836,
-    "status": "WHITELIST"
-  },
-  "6UHNzMKqTqgeqgHrHt6UZzETcjj4PUgp4LCKyMmWcj28": {
-    "discovered_at": 1789212355.9925382,
-    "last_active": 1789212355.9925382,
-    "status": "WHITELIST"
-  },
-  "8kataWHXm8cwrAiCyGqDfbigF8osAsM9uknzTZabVuXB": {
-    "discovered_at": 1789383606.8052201,
-    "last_active": 1789383606.8052201,
-    "status": "WHITELIST"
-  },
-  "CzMjzTeMPAvhdF64bTX5VJzgjJoenYbJZPBXjX6Ggyfb": {
-    "discovered_at": 1789192515.5766687,
-    "last_active": 1789192515.5766687,
-    "status": "WHITELIST"
-  },
-  "CftptELosHCk1tmy54xfEYUaTQU1oe8veSuUWJup7PCZ": {
-    "discovered_at": 1789277133.739479,
-    "last_active": 1789277133.739479,
-    "status": "WHITELIST"
-  },
-  "4xfDsRCoZJJyYnL6BLRQcCJvtSBWzyhXJYq8qUzrAaKx": {
-    "discovered_at": 1789361920.886341,
-    "last_active": 1789361920.886341,
-    "status": "WHITELIST"
-  },
-  "59YHn2DGKP6GU1LCvNMTzUhxQw8v5GJktL7cjKxCef1B": {
-    "discovered_at": 1789191230.5198226,
-    "last_active": 1789191230.5198226,
-    "status": "WHITELIST"
-  },
-  "DKVizEaf4SP53Srj5jjxtzpXAXnBH1nc12VVtvLjidzg": {
-    "discovered_at": 1789363841.7261024,
-    "last_active": 1789363841.7261024,
-    "status": "WHITELIST"
-  },
-  "Dedvbe73L9YSoe5Wh6a2evojdNHmGPNRnSyV6p6LpXvN": {
-    "discovered_at": 1789542187.082184,
-    "last_active": 1789542187.082184,
-    "status": "WHITELIST"
-  },
-  "GGFXgFXt4gddSyLKt4Cru46USkri67jtYKBhYNqyYGwm": {
-    "discovered_at": 1789094305.6592667,
-    "last_active": 1789094305.6592667,
-    "status": "WHITELIST"
-  },
-  "HUW8z4Br7eh6EDWi899d66PMxDnwB3J3BQXc2GUAVYyz": {
-    "discovered_at": 1789344135.1670272,
-    "last_active": 1789344135.1670272,
-    "status": "WHITELIST"
-  },
-  "2xeLWiVhHB3LGRyXCSjpawvJKKiohhdpKJTQW2KtphLM": {
-    "discovered_at": 1789159030.2903738,
-    "last_active": 1789159030.2903738,
-    "status": "WHITELIST"
-  },
-  "AXzRMshthJJPmi7om4JWGkT4BbDasb4NTaqFnoBureGX": {
-    "discovered_at": 1789424349.2443707,
-    "last_active": 1789424349.2443707,
-    "status": "WHITELIST"
-  },
-  "83PBcs11rv1uzfekZC8wjBDUN2mHvKYg3GyPFAKBZqG7": {
-    "discovered_at": 1789497170.399321,
-    "last_active": 1789497170.399321,
-    "status": "WHITELIST"
-  },
-  "H4GMgFtmK7WZceb7m5zGrPEhx7wxsMGS2En2X1JuzZnp": {
-    "discovered_at": 1789202744.5565126,
-    "last_active": 1789202744.5565126,
-    "status": "WHITELIST"
-  },
-  "5hSu2S72i7w1TKcVEov7wHi9MV2Leayzxg14iYH7xcNK": {
-    "discovered_at": 1789511748.8836632,
-    "last_active": 1789511748.8836632,
-    "status": "WHITELIST"
-  },
-  "GrmXWnhpbyR4KKVpNfMK3ynU8nRbeekoLzkgeMnGe3pS": {
-    "discovered_at": 1789398307.6077383,
-    "last_active": 1789398307.6077383,
-    "status": "WHITELIST"
-  },
-  "HsoG858Xsq9BNBELPK2CJiqfiVZwh7HUo2J7p1tsirYg": {
-    "discovered_at": 1789328862.7999861,
-    "last_active": 1789328862.7999861,
-    "status": "WHITELIST"
-  },
-  "H4afz7oe5QC7oP9PBJNbmubZ6HdezDKugrwwqPMN4Faw": {
-    "discovered_at": 1789432020.976071,
-    "last_active": 1789432020.976071,
-    "status": "WHITELIST"
-  },
-  "CUTZr7gqsdh6YTmuUZ6eZxt2be9UM9w58Au1buyQmVxi": {
-    "discovered_at": 1789322489.6375346,
-    "last_active": 1789322489.6375346,
-    "status": "WHITELIST"
-  },
-  "4sqtoxSmuwxhwbNYBRX1jBPDs7aWjjXT9dVPwJirmLgd": {
-    "discovered_at": 1789424349.2443707,
-    "last_active": 1789424349.2443707,
-    "status": "WHITELIST"
-  },
-  "b2ZaVkeQBdjhmFQXJqJCKdEFgoqTn3sxv7NT95LTvvV": {
-    "discovered_at": 1789568287.9457357,
-    "last_active": 1789568287.9457357,
-    "status": "WHITELIST"
+    "discovered_at": 1789707012.2787077,
+    "last_active": 1789707012.2787077,
+    "status": "WHITELIST",
+    "alpha_score": 100.55,
+    "winrate_7d": 77.8,
+    "profit_7d": 1384.5,
+    "trades_7d": 169,
+    "tags": [
+      "gmgn_go",
+      "gmgn"
+    ]
   }
 }
