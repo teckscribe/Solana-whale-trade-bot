@@ -74,14 +74,21 @@ class Position:
         mode: str = "PAPER",
         execution_engine: str = "JUPITER",
         strategy_order_id: Optional[str] = None,
+        entry_mid_price: float = 0.0,
     ):
         self.token = str(token)
         self.symbol = str(symbol)
         self.wallet = str(wallet)
         self.entry_price = float(entry_price)
+        # DexScreener mid at entry. TP/SL/trailing triggers compare the live mid against
+        # THIS, never against entry_price (a Jupiter executable fill that already includes
+        # price impact). Comparing mid-vs-fill made every position open several % underwater
+        # and fired stop-losses seconds after entry on pure oracle disagreement.
+        self.entry_mid_price = float(entry_mid_price) if entry_mid_price and entry_mid_price > 0 else float(entry_price)
         self.trade_size = float(trade_size)
         self.tokens_held = float(tokens_held)
-        self.token_decimals = int(token_decimals)
+        self.token_decimals = int(token_decimals) if token_decimals is not None else 9
+        self.consensus_whales: set = {self.wallet} if self.wallet else set()
         self.state = PositionState(state) if isinstance(state, str) else state
         self.entry_time = entry_time or datetime.now(timezone.utc).isoformat()
         self.entry_price_impact_pct = float(entry_price_impact_pct)
@@ -98,7 +105,7 @@ class Position:
         self.elapsed = 0
 
         # Trailing Stop & High-Water-Mark
-        self.high_water_mark_price = float(entry_price)
+        self.high_water_mark_price = self.entry_mid_price
         self.trailing_stop_active = False
 
         # Exit metadata
@@ -185,9 +192,10 @@ class Position:
 
         self.current_price = current_price
 
-        # Update PnL
-        if self.entry_price > 0:
-            self.profit_pct = ((current_price - self.entry_price) / self.entry_price) * 100.0
+        # Update PnL (mid-vs-mid; the realised fill is settled separately at close)
+        ref = self.entry_mid_price if self.entry_mid_price > 0 else self.entry_price
+        if ref > 0:
+            self.profit_pct = ((current_price - ref) / ref) * 100.0
             self.profit_usd = self.trade_size * (self.profit_pct / 100.0)
 
         # Update High-Water Mark
@@ -244,6 +252,8 @@ class Position:
             "wallet": self.wallet,
             "whale_wallet": self.wallet,
             "entry_price": self.entry_price,
+            "entry_mid_price": self.entry_mid_price,
+            "consensus_whales": sorted(self.consensus_whales),
             "current_price": self.current_price,
             "trade_size": self.trade_size,
             "trade_size_usd": self.trade_size,
@@ -299,7 +309,7 @@ class Position:
             entry_price=float(data.get("entry_price", 0.0)),
             trade_size=float(data.get("trade_size") or data.get("trade_size_usd", 0.0)),
             tokens_held=float(data.get("tokens_held", 0.0)),
-            token_decimals=int(data.get("token_decimals", 9)),
+            token_decimals=data.get("token_decimals"),
             state=data.get("state", PositionState.OPEN.value),
             entry_time=data.get("entry_time"),
             entry_price_impact_pct=float(data.get("entry_price_impact_pct", 0.0)),
@@ -307,13 +317,15 @@ class Position:
             mode=data.get("mode", "PAPER"),
             execution_engine=data.get("execution_engine", "JUPITER"),
             strategy_order_id=data.get("strategy_order_id"),
+            entry_mid_price=float(data.get("entry_mid_price") or 0.0),
         )
+        pos.consensus_whales = set(data.get("consensus_whales") or [pos.wallet])
         pos.current_price = float(data.get("current_price", pos.entry_price))
         pos.profit_pct = float(data.get("profit_pct", 0.0))
         pos.profit_usd = float(data.get("profit_usd", 0.0))
         pos.max_profit = float(data.get("max_profit", 0.0))
         pos.elapsed = int(data.get("elapsed", 0))
-        pos.high_water_mark_price = float(data.get("high_water_mark_price", pos.entry_price))
+        pos.high_water_mark_price = float(data.get("high_water_mark_price") or pos.entry_mid_price)
         pos.trailing_stop_active = bool(data.get("trailing_stop_active", False))
         pos.exit_price = float(data.get("exit_price", 0.0))
         pos.exit_reason = data.get("exit_reason", "")

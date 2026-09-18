@@ -225,8 +225,7 @@ def get_scanner_status() -> bool:
 
 @app.get("/api/dashboard")
 async def get_dashboard(_: bool = Depends(require_auth)):
-    load_dotenv(override=True)
-    raw_mode = os.getenv("TRADE_MODE", "PAPER").strip().strip('"\'').upper()
+    raw_mode = str(settings_manager.get("TRADE_MODE")).strip().upper()
     trade_mode = "LIVE" if raw_mode in ["TRUE", "LIVE"] else "PAPER"
     
     trades_file = "live_trades.json" if trade_mode == "LIVE" else "paper_trades.json"

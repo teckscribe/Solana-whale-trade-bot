@@ -56,6 +56,10 @@ class WhaleScanner:
         self.req_id = 1
         self.websocket = None
         self.wallet_tx_times = {}
+        # Strong refs to in-flight callback tasks. asyncio only weakly references tasks;
+        # without this a decode task can be garbage-collected mid-flight and the whale
+        # signal silently vanishes.
+        self._callback_tasks = set()
 
     async def update_wallets(self, new_wallets: set):
         if self.active_wallets != new_wallets:
@@ -173,8 +177,11 @@ class WhaleScanner:
                             signature = result["value"]["signature"]
                             err = result["value"]["err"]
                             
-                            wallet = self.sub_id_to_wallet.get(sub_id, "Unknown")
-                            
+                            wallet = self.sub_id_to_wallet.get(sub_id)
+                            if wallet is None:
+                                log.warning(f"Notification for unknown subscription {sub_id} (sig {signature[:10]}). Dropping.")
+                                continue
+
                             if err is None:
                                 current_time = time.time()
                                 if wallet not in self.wallet_tx_times:
@@ -188,7 +195,9 @@ class WhaleScanner:
                                 else:
                                     self.wallet_tx_times[wallet].append(current_time)
                                     log.info(f"New successful TX detected: {signature}")
-                                    asyncio.create_task(self.callback(signature, wallet))
+                                    task = asyncio.create_task(self.callback(signature, wallet))
+                                    self._callback_tasks.add(task)
+                                    task.add_done_callback(self._callback_tasks.discard)
                                 
             except websockets.ConnectionClosed:
                 log.warning(f"WebSocket connection closed, reconnecting in {backoff}s...")

@@ -16,6 +16,17 @@ if _WTB_DIR not in sys.path:
 
 import settings_manager
 import connection_pool
+import _settings_sandbox
+
+
+def setUpModule():
+    _settings_sandbox.enter()
+
+
+def tearDownModule():
+    _settings_sandbox.exit_()
+
+
 from jito_bundle import (
     JITO_TIP_ACCOUNTS,
     BLOCK_ENGINES,

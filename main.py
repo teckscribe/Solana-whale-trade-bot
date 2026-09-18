@@ -51,8 +51,9 @@ logging.getLogger("websockets").setLevel(logging.WARNING)
 logging.getLogger("solana").setLevel(logging.WARNING)
 log = logging.getLogger("WhaleBotMain")
 
+import settings_manager
+
 RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
-DISCOVERY_INTERVAL = int(float(os.getenv("DISCOVERY_INTERVAL_MINUTES", "10")) * 60)
 
 async def handle_new_transaction(signature: str, wallet: str):
     """
@@ -93,16 +94,18 @@ async def discovery_loop(scanner: WhaleScanner):
                 await scanner.update_wallets(active_whales)
             
             # Run GMGN Smart Money discovery (sends Telegram notifications for approval)
-            try:
-                await run_gmgn_discovery()
-            except Exception as gmgn_e:
-                log.warning(f"GMGN Discovery error (non-fatal): {gmgn_e}")
-                
+            if bool(settings_manager.get("GMGN_DISCOVERY_ENABLED")):
+                try:
+                    await run_gmgn_discovery()
+                except Exception as gmgn_e:
+                    log.warning(f"GMGN Discovery error (non-fatal): {gmgn_e}")
+
         except Exception as e:
             log.error(f"Error in discovery loop: {e}")
-            
-        log.info(f"Discovery loop sleeping for {DISCOVERY_INTERVAL} seconds...")
-        await asyncio.sleep(DISCOVERY_INTERVAL)
+
+        interval = int(settings_manager.get("DISCOVERY_INTERVAL_MINUTES")) * 60
+        log.info(f"Discovery loop sleeping for {interval} seconds...")
+        await asyncio.sleep(interval)
 
 async def json_sync_loop(scanner: WhaleScanner):
     """
@@ -125,12 +128,11 @@ async def ml_retrain_loop():
     Periodically retrains the ML model on recent paper trades.
     """
     log.info("Starting ML Retraining Loop (runs every 6 hours)...")
-    if os.getenv("ML_ENGINE", "FALSE").upper() != "TRUE":
-        log.info("ML Engine disabled in .env. Skipping background retraining.")
-        return
-        
     while True:
         await asyncio.sleep(6 * 3600)
+        if not bool(settings_manager.get("ML_ENGINE")):
+            log.info("ML Engine disabled in settings. Skipping this retraining cycle.")
+            continue
         try:
             log.info("Triggering ML model retraining...")
             await asyncio.to_thread(train_model)

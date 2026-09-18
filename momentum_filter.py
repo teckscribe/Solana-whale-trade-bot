@@ -8,7 +8,10 @@ import time
 
 log = logging.getLogger("MomentumFilter")
 
-MAX_M5_PUMP_PCT = float(os.getenv("MAX_M5_PUMP_PCT", "300.0"))
+import settings_manager
+
+def _max_pump_pct() -> float:
+    return float(settings_manager.get("MAX_M5_PUMP_PCT"))
 
 GECKO_BASE = "https://api.geckoterminal.com/api/v2/networks/solana"
 
@@ -65,12 +68,14 @@ async def _resolve_top_pool(client: httpx.AsyncClient, token_address: str) -> Op
         return None
 
 
-async def check_momentum(token_address: str, max_pump_pct: float = MAX_M5_PUMP_PCT) -> bool:
+async def check_momentum(token_address: str, max_pump_pct: Optional[float] = None) -> bool:
     """
     Returns True if the token is SAFE to buy.
     Returns False if the token has pumped more than max_pump_pct in the last 5 minutes.
     If max_pump_pct <= 0, 5-minute pump check is DISABLED.
     """
+    if max_pump_pct is None:
+        max_pump_pct = _max_pump_pct()
     if max_pump_pct <= 0:
         return True
     try:

@@ -20,8 +20,17 @@ if _WTB_DIR not in sys.path:
 import settings_manager
 import connection_pool
 import whale_manager
+import _settings_sandbox
 from position_state import Position, PositionState, VALID_TRANSITIONS
 from trade_brain import STATE, TradingState, flush_all_state_now
+
+
+def setUpModule():
+    _settings_sandbox.enter()
+
+
+def tearDownModule():
+    _settings_sandbox.exit_()
 
 
 class TestSettingsManager(unittest.TestCase):
@@ -57,7 +66,7 @@ class TestSettingsManager(unittest.TestCase):
         self.assertFalse(ok)
 
     def test_audit_trail(self):
-        history_path = os.path.join(_WTB_DIR, "data", "settings_history.jsonl")
+        history_path = settings_manager.HISTORY_FILE
         cur_val = settings_manager.get("TAKE_PROFIT_PCT")
         new_val = 22.2 if cur_val != 22.2 else 18.5
         ok, err = settings_manager.update("TAKE_PROFIT_PCT", new_val, source="audit_test")

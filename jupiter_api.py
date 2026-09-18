@@ -192,10 +192,10 @@ async def get_token_decimals(mint: str) -> Optional[int]:
     except Exception as e:
         log.debug(f"getTokenSupply failed for {mint[:8]}: {e}")
 
-    # Fallback to standard SPL 6 decimals if RPC fails/rate-limits
-    log.warning(f"Defaulting to 6 decimals for {mint[:8]}")
-    _decimals_cache[mint] = 6
-    return 6
+    # No guess. A wrong decimals value mis-sizes every quote by 1000x and silently
+    # defeats the exit-liquidity check; callers refuse the trade on None.
+    log.warning(f"Could not resolve decimals for {mint[:8]} — not caching a guess.")
+    return None
 
 
 async def preload_token_metadata(token_mints: Set[str]) -> int:
@@ -346,30 +346,52 @@ async def get_swap_quote(input_mint: str, output_mint: str, amount_lamports: int
     return None
 
 
+_sol_price_cache: Tuple[float, float] = (0.0, 0.0)  # (price, fetched_at)
+SOL_PRICE_TTL = 15.0
+
+
 async def get_sol_price_usd() -> float:
     """
-    Fetches the real-time price of Solana (SOL) in USD from Binance, CoinGecko, or DexScreener.
-    Uses shared connection pool.
+    Real-time SOL/USD from Binance, then CoinGecko, then the wrapped-SOL DexScreener pair.
+    Cached briefly; on total failure returns the last good price rather than a hardcoded
+    constant, so entry sizing and P&L stay internally consistent.
     """
+    global _sol_price_cache
+    now = time.time()
+    if _sol_price_cache[0] > 0 and now - _sol_price_cache[1] < SOL_PRICE_TTL:
+        return _sol_price_cache[0]
+
     client = await get_client()
+    price = 0.0
     try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT"
-        resp = await client.get(url, timeout=4.0)
+        resp = await client.get("https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT", timeout=4.0)
         if resp.status_code == 200:
             price = float(resp.json().get("price", 0.0))
-            if price > 0:
-                return price
     except Exception:
         pass
 
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
-        resp = await client.get(url, timeout=4.0)
-        if resp.status_code == 200:
-            price = float(resp.json().get("solana", {}).get("usd", 0.0))
-            if price > 0:
-                return price
-    except Exception:
-        pass
+    if price <= 0:
+        try:
+            resp = await client.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd", timeout=4.0)
+            if resp.status_code == 200:
+                price = float(resp.json().get("solana", {}).get("usd", 0.0))
+        except Exception:
+            pass
 
-    return 75.37
+    if price <= 0:
+        try:
+            body = await dex_get(f"{DEXSCREENER_PRICE_API}/{SOL_MINT}")
+            pairs = (body or {}).get("pairs") or []
+            if pairs:
+                price = float(pairs[0].get("priceUsd") or 0.0)
+        except Exception:
+            pass
+
+    if price > 0:
+        _sol_price_cache = (price, now)
+        return price
+
+    if _sol_price_cache[0] > 0:
+        log.warning(f"All SOL price sources failed; using last good ${_sol_price_cache[0]:.2f}")
+        return _sol_price_cache[0]
+    return 0.0

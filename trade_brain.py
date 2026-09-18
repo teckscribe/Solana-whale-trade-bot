@@ -61,6 +61,9 @@ ATA_RENT_RECLAIMED = os.getenv("ATA_RENT_RECLAIMED", "FALSE").strip().upper() ==
 
 POLL_INTERVAL = max(2.0, (60 * MAX_CONCURRENT_TRADES) / 280.0)
 
+def _is_live() -> bool:
+    return str(TRADE_MODE).upper() in ("LIVE", "TRUE")
+
 def _refresh_settings():
     """Hot-reloads settings from settings_manager without needing a bot restart."""
     global TRADE_MODE, ALLOCATION_PCT, ML_ENGINE_ENABLED, MOMENTUM_FILTER_ENABLED
@@ -147,7 +150,19 @@ class TradingState:
         self.initial_balance: float = 0.0
         self.paper_wallet_version: int = 0
         self.closed_trades: list = []
+        # token -> exit reason. Set by record_trade() when the copied whale sells;
+        # consumed by the position monitor on its next poll.
+        self.exit_requests: Dict[str, str] = {}
+        # token -> {wallet: signal_ts}. Whitelisted whale buys seen recently, so a second
+        # whale buying the same token within the window counts as consensus.
+        self.recent_buy_signals: Dict[str, Dict[str, float]] = {}
         self._lock = asyncio.Lock()
+
+    def request_exit(self, token: str, reason: str):
+        self.exit_requests[token] = reason
+
+    def pop_exit_request(self, token: str) -> Optional[str]:
+        return self.exit_requests.pop(token, None)
 
     def get_open_exposure_usd(self) -> float:
         return sum(
@@ -246,7 +261,7 @@ async def restore_active_trades():
 
             # Mode safety check: do not resume PAPER trades into a LIVE engine run
             trade_mode_recorded = t.get("mode", "").upper()
-            if TRADE_MODE in ["LIVE", "TRUE"] and trade_mode_recorded == "PAPER":
+            if _is_live() and trade_mode_recorded == "PAPER":
                 log.warning(f"Safety gate: Refusing to resume PAPER position {token[:8]} into LIVE trading run.")
                 continue
 
@@ -280,7 +295,7 @@ async def restore_active_trades():
                 except Exception:
                     wallet_address = os.getenv("WALLET_ADDRESS", "")
 
-            if TRADE_MODE in ["LIVE", "TRUE"]:
+            if _is_live():
                 task = asyncio.create_task(
                     monitor_gmgn_position(wallet, token, entry_price, entry_time, trade_size, strategy_order_id, wallet_address)
                 )
@@ -289,7 +304,8 @@ async def restore_active_trades():
                     monitor_position(wallet, token, entry_price, entry_time, trade_size,
                                      actual_entry_cost_usd=actual_entry_cost_usd,
                                      tokens_held=t.get("tokens_held", 0.0),
-                                     token_decimals=t.get("token_decimals"))
+                                     token_decimals=t.get("token_decimals"),
+                                     entry_mid_price=float(t.get("entry_mid_price") or 0.0))
                 )
             _background_tasks.add(task)
             task.add_done_callback(_background_tasks.discard)
@@ -351,9 +367,10 @@ async def get_sol_balance() -> int:
     if not LIVE_TRADING_AVAILABLE or not WALLET_PRIVATE_KEY:
         return 0
     try:
+        from connection_pool import get_rpc_client
         keypair = Keypair.from_base58_string(WALLET_PRIVATE_KEY)
         wallet_pubkey = keypair.pubkey()
-        solana_client = AsyncClient(SOLANA_RPC_URL)
+        solana_client = await get_rpc_client()
         resp = await solana_client.get_balance(wallet_pubkey)
         return resp.value
     except Exception as e:
@@ -365,7 +382,8 @@ async def get_spl_token_balance(wallet_pubkey_str: str, token_mint_str: str) -> 
     if not LIVE_TRADING_AVAILABLE or not wallet_pubkey_str or not token_mint_str:
         return -1.0
     try:
-        solana_client = AsyncClient(SOLANA_RPC_URL)
+        from connection_pool import get_rpc_client
+        solana_client = await get_rpc_client()
         resp = await solana_client.get_token_accounts_by_owner_json_parsed(
             Pubkey.from_string(wallet_pubkey_str),
             TokenAccountOpts(mint=Pubkey.from_string(token_mint_str))
@@ -512,10 +530,12 @@ async def monitor_gmgn_position(
                     )
                     break
 
-            exit_reason = None
+            exit_reason = STATE.pop_exit_request(token)
             exit_price = last_price
 
-            if TIMEOUT_ENABLED and elapsed >= MAX_HOLD_SECONDS:
+            if exit_reason:
+                pass
+            elif TIMEOUT_ENABLED and elapsed >= MAX_HOLD_SECONDS:
                 exit_reason = "TIMEOUT"
             else:
                 current_price = await get_live_price(token)
@@ -613,6 +633,36 @@ async def monitor_gmgn_position(
             await close_gmgn_trade(
                 wallet, token, entry_time, entry_price, exit_price,
                 trade_size, "TIMEOUT", real_profit
+            )
+            break
+
+        # Whale-sold / external exit request
+        requested = STATE.pop_exit_request(token)
+        if requested:
+            log.info(f"GMGN: {requested} for {token[:8]}. Cancelling strategy + selling...")
+            await cancel_strategy_order(wallet_address, strategy_order_id)
+            sell_result = await execute_gmgn_sell_all(wallet_address, token)
+            exit_price = entry_price
+            real_profit = None
+            if sell_result.get("confirmed"):
+                report = sell_result.get("report", {})
+                price_str = report.get("price_usd", "")
+                if price_str:
+                    try:
+                        exit_price = float(price_str)
+                    except ValueError:
+                        pass
+                profit_str = report.get("realized_profit") or report.get("usdt_profit")
+                if profit_str:
+                    try:
+                        real_profit = float(profit_str)
+                    except ValueError:
+                        pass
+            async with _dashboard_lock:
+                _active_trades.pop(token, None)
+            await close_gmgn_trade(
+                wallet, token, entry_time, entry_price, exit_price,
+                trade_size, requested, real_profit
             )
             break
 
@@ -891,8 +941,8 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
     real_exit_proceeds_usd = None
     fill_data_available = False
 
-    current_mode = os.getenv("TRADE_MODE", "PAPER").strip().strip('"\'').upper()
-    if current_mode in ["LIVE", "TRUE"]:
+    current_mode = str(TRADE_MODE).upper()
+    if _is_live():
         log.error(
             f"close_trade() called for LIVE trade {token[:8]}. "
             f"Live trades must be closed via close_gmgn_trade() or monitor_gmgn_position(). "
@@ -907,6 +957,8 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
 
     # What the position would ACTUALLY fetch right now, at its real size.
     # 0.0 means no sell route exists — the position is stuck, not worthless-by-price.
+    # Both entry_price and this exit are Jupiter executable fills, so the P&L booked
+    # here is fill-vs-fill; the DexScreener mid only decided WHEN to exit.
     executable_exit_price = 0.0
     if tokens_held > 0 and token_decimals is not None:
         executable_exit_price = await get_executable_price_usd(
@@ -998,20 +1050,23 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
 
 
 async def monitor_position(wallet: str, token: str, entry_price: float, entry_time: datetime, trade_size: float,
-                           actual_entry_cost_usd=None, tokens_held: float = 0.0, token_decimals=None):
+                           actual_entry_cost_usd=None, tokens_held: float = 0.0, token_decimals=None,
+                           entry_mid_price: float = 0.0):
     """
     Background loop that polls DexScreener to simulate holding a position.
 
-    DexScreener mid prices drive the TP/SL *trigger* only — they're cheap enough to poll
-    every couple of seconds. The realised fill is priced inside close_trade() off a real
-    sell-side route for `tokens_held`, so exits carry their true price impact.
+    DexScreener mid prices drive the TP/SL *trigger* only, measured against the mid that
+    was quoted at entry (`entry_mid_price`) so the comparison is like-for-like. The
+    realised fill is priced inside close_trade() off a real sell-side route for
+    `tokens_held` against the executable `entry_price`, so exits carry their true impact.
     """
+    trigger_ref = entry_mid_price if entry_mid_price > 0 else entry_price
     log.info(
-        f"Started monitoring position: {token} from entry {entry_price:.8f} "
+        f"Started monitoring position: {token} from fill {entry_price:.8f} (mid {trigger_ref:.8f}) "
         f"with ${trade_size:.2f} ({tokens_held:.4f} tokens)"
     )
     max_profit = 0.0
-    last_valid_price = entry_price
+    last_valid_price = trigger_ref
     failed_api_calls = 0
     stagnant_loops = 0
     close_retry_count = 0
@@ -1081,7 +1136,15 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
             continue
             
         failed_api_calls = 0
-        
+
+        # --- WHALE SOLD / EXTERNAL EXIT REQUEST ---
+        requested = STATE.pop_exit_request(token)
+        if requested:
+            log.info(f"Exit requested for {token[:8]} ({requested}). Closing.")
+            if await _attempt_close(requested, current_price):
+                break
+            continue
+
         # --- PANIC SELL CHECK ---
         if os.path.exists("panic.json"):
             try:
@@ -1124,11 +1187,11 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
             profit_pct = pos.profit_pct
             profit_usd = pos.profit_usd
         else:
-            profit_pct = ((current_price - entry_price) / entry_price) * 100
+            profit_pct = ((current_price - trigger_ref) / trigger_ref) * 100 if trigger_ref > 0 else 0.0
             profit_usd = trade_size * (profit_pct / 100)
             if profit_pct > max_profit:
                 max_profit = profit_pct
-            
+
         async with _dashboard_lock:
             if token in _active_trades:
                 _active_trades[token]["current_price"] = current_price
@@ -1166,37 +1229,89 @@ async def record_trade(trade_data: dict):
     if status in ["BLACKLIST", "NEUTRAL"]:
         log.info(f"Ignoring trade from {status} whale: {wallet[:8]}... Bot only trades for WHITELIST.")
         return
-        
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    # ── Whale SELL → exit signal ─────────────────────────────────────────────
+    # The whale we copied leaving the trade is the strongest exit signal a copy-trader
+    # has. Any sell (partial included) by the copied whale, or by any whale counted in a
+    # consensus entry, requests an exit; the monitor loop executes it on its next poll.
+    for sold in trade_data.get("sold", []):
+        sold_mint = sold.get("mint")
+        if not sold_mint or sold_mint in IGNORE_MINTS:
+            continue
+        async with _dashboard_lock:
+            pos = STATE.get_position(sold_mint)
+            if pos is None:
+                continue
+            followed = pos.consensus_whales if isinstance(pos, Position) else {pos.get("whale_wallet") or pos.get("wallet")}
+            if wallet in followed:
+                STATE.request_exit(sold_mint, "WHALE_SOLD")
+                log.info(f"🐋 Whale {wallet[:8]} SOLD {sold_mint[:8]} — exit requested.")
+            else:
+                log.info(f"Whale {wallet[:8]} sold {sold_mint[:8]} but we followed {[w[:8] for w in followed]}. Ignoring.")
+
+    bought_list = trade_data.get("bought", [])
+    if not bought_list:
+        return
+
+    # ── Record buy signals for consensus (before any filter can reject them) ──
+    CONSENSUS_WINDOW_S = 15 * 60
+    for item in bought_list:
+        mint = item.get("mint")
+        if mint and mint not in IGNORE_MINTS:
+            sigs = STATE.recent_buy_signals.setdefault(mint, {})
+            sigs[wallet] = now_ts
+    for mint in list(STATE.recent_buy_signals):
+        sigs = {w: t for w, t in STATE.recent_buy_signals[mint].items() if now_ts - t <= CONSENSUS_WINDOW_S}
+        if sigs:
+            STATE.recent_buy_signals[mint] = sigs
+        else:
+            del STATE.recent_buy_signals[mint]
+
     if (len(_background_tasks) + _pending_trades) >= MAX_CONCURRENT_TRADES:
         log.warning(f"Max concurrent trades reached ({MAX_CONCURRENT_TRADES}). Skipping.")
         return
-    
-    bought_list = trade_data.get("bought", [])
-    
-    if not bought_list:
-        return
-        
+
     for item in bought_list:
         if (len(_background_tasks) + _pending_trades) >= MAX_CONCURRENT_TRADES:
             log.warning(f"Max concurrent trades reached ({MAX_CONCURRENT_TRADES}). Skipping remaining tokens in batch.")
             break
-            
+
         token_address = item.get("mint")
         if token_address in IGNORE_MINTS:
             log.info(f"Skipping {token_address} - Matched stablecoin/WSOL keyword.")
             continue
-            
+
         if token_address in _processing_tokens:
             log.info(f"Token {token_address[:8]} is already being processed. Skipping duplicate API event.")
             continue
-            
+
+        # Consensus: how many distinct whitelisted whales bought this token recently.
+        recent_whales = set(STATE.recent_buy_signals.get(token_address, {}).keys()) | {wallet}
+        is_consensus = len(recent_whales) >= 2
+
         async with _dashboard_lock:
-            if token_address in _active_trades:
-                log.info(f"Token {token_address[:8]} is already being tracked. Skipping.")
+            pos = STATE.get_position(token_address)
+            if pos is not None:
+                # Already holding. A second whale buying is still information: widen the
+                # set of whales whose SELL will trigger our exit, and log the consensus.
+                if isinstance(pos, Position) and wallet not in pos.consensus_whales:
+                    pos.consensus_whales.add(wallet)
+                    log.info(
+                        f"🔥 CONSENSUS on held position {token_address[:8]}: whale {wallet[:8]} also bought. "
+                        f"Now following {len(pos.consensus_whales)} whales for exit."
+                    )
+                else:
+                    log.info(f"Token {token_address[:8]} is already being tracked. Skipping.")
                 continue
+
+        if is_consensus:
+            log.info(f"🔥 MULTI-WHALE CONSENSUS SIGNAL for {token_address[:8]}! Whales: {[w[:8] for w in recent_whales]}")
 
         _processing_tokens.add(token_address)
         _pending_trades += 1
+        paper_debited = 0.0
         try:
             entry_price, symbol, name, volume_24h, market_cap = await get_token_price_usd(token_address)
             symbol_upper = symbol.upper()
@@ -1224,26 +1339,6 @@ async def record_trade(trade_data: dict):
                     )
                     continue
 
-                # Check for Multi-Whale Consensus Signal (2+ whitelisted whales bought same token)
-                #
-                # Snapshot under the lock. Iterating _active_trades.values() directly races with
-                # the monitor tasks that add/remove positions, and "dictionary changed size
-                # during iteration" here propagates out of record_trade (there is no except on
-                # the enclosing try) and silently kills the whole signal.
-                is_consensus = False
-                recent_whales = {wallet}
-                async with _dashboard_lock:
-                    active_snapshot = list(_active_trades.values())
-                for active_t in active_snapshot:
-                    if active_t.get("token_address") == token_address or active_t.get("token") == token_address:
-                        w_addr = active_t.get("whale_wallet") or active_t.get("wallet", "")
-                        if w_addr:
-                            recent_whales.add(w_addr)
-
-                if len(recent_whales) >= 2:
-                    is_consensus = True
-                    log.info(f"🔥 MULTI-WHALE CONSENSUS SIGNAL DETECTED for {token_address[:8]}! Whales: {list(recent_whales)}")
-                    
                 if MOMENTUM_FILTER_ENABLED and not is_consensus:
                     is_safe = await check_momentum(token_address)
                     if not is_safe:
@@ -1294,14 +1389,19 @@ async def record_trade(trade_data: dict):
                 min_trade_lamports = int(MIN_TRADE_SOL * 1_000_000_000)
 
 
-                current_mode = os.getenv("TRADE_MODE", "PAPER").strip().strip('"\'').upper()
+                current_mode = str(TRADE_MODE).upper()
                 if current_mode == "PAPER":
                     sol_price = await get_sol_price_usd()
-                    if sol_price <= 0: sol_price = 150.0
+                    if sol_price <= 0:
+                        log.warning(f"Trade Rejected: SOL/USD price unavailable; cannot size {token_address[:8]}.")
+                        continue
 
                     async with STATE._lock:
                         equity = STATE.wallet_balance + open_exposure_usd
-                        trade_size = STATE.wallet_balance * (effective_alloc_pct / 100.0)
+                        # Size on EQUITY, capped by available cash. Sizing on cash alone
+                        # shrinks each successive trade while positions are open, pushing
+                        # later entries into the fee-hostile sub-$10 range.
+                        trade_size = min(equity * (effective_alloc_pct / 100.0), STATE.wallet_balance)
 
                         # Cap 1: total equity at risk across all open positions.
                         exposure_room = (equity * (MAX_PORTFOLIO_EXPOSURE_PCT / 100.0)) - open_exposure_usd
@@ -1335,12 +1435,13 @@ async def record_trade(trade_data: dict):
                         if not STATE.debit_balance(trade_size):
                             log.warning("Insufficient paper balance in RAM.")
                             continue
-                            
+                        paper_debited = trade_size
+
                     # For paper mode, we need to know how many lamports we are simulating buying to check liquidity
                     sol_amount = trade_size / sol_price
                     lamports = int(sol_amount * 1_000_000_000)
                     
-                elif current_mode in ["LIVE", "TRUE"]:
+                elif _is_live():
                     real_balance_lamports = await get_sol_balance()
 
                     # Always leave LIVE_FEE_RESERVE_SOL un-allocated so ALLOCATION_PCT
@@ -1355,7 +1456,9 @@ async def record_trade(trade_data: dict):
                         continue
 
                     sol_price_for_caps = await get_sol_price_usd()
-                    if sol_price_for_caps <= 0: sol_price_for_caps = 150.0
+                    if sol_price_for_caps <= 0:
+                        log.warning(f"Trade Rejected: SOL/USD price unavailable; cannot size {token_address[:8]}.")
+                        continue
 
                     # Same two caps as PAPER, so live sizing can't exceed what paper validated.
                     live_equity_usd = (real_balance_lamports / 1_000_000_000) * sol_price_for_caps + open_exposure_usd
@@ -1384,8 +1487,7 @@ async def record_trade(trade_data: dict):
                         )
                         continue
                         
-                    sol_price = await get_sol_price_usd()
-                    if sol_price <= 0: sol_price = 150.0
+                    sol_price = sol_price_for_caps
                     trade_size_sol = lamports / 1_000_000_000
                     trade_size = trade_size_sol * sol_price
                 else:
@@ -1398,9 +1500,6 @@ async def record_trade(trade_data: dict):
                 buy_route = await get_swap_quote(sol_mint, token_address, lamports, use_cache=False)
                 if not buy_route:
                     log.warning(f"Trade Rejected: No liquidity to buy {token_address}.")
-                    if current_mode == "PAPER":
-                        async with STATE._lock:
-                            STATE.credit_balance(trade_size)
                     continue
                     
                 expected_output = int(buy_route.get("outAmount", "0"))
@@ -1409,15 +1508,9 @@ async def record_trade(trade_data: dict):
                     sell_route = await get_swap_quote(token_address, sol_mint, expected_output)
                     if not sell_route:
                         log.error(f"HONEYPOT DETECTED: {token_address} allows buying but blocks selling! Trade rejected.")
-                        if current_mode == "PAPER":
-                            async with STATE._lock:
-                                STATE.credit_balance(trade_size)
                         continue
                 else:
                     log.warning(f"Trade Rejected: Zero output expected for {token_address}.")
-                    if current_mode == "PAPER":
-                        async with STATE._lock:
-                            STATE.credit_balance(trade_size)
                     continue
 
                 # ── Price impact gate ─────────────────────────────────────────────────
@@ -1427,9 +1520,6 @@ async def record_trade(trade_data: dict):
                         f"Trade Rejected: {token_address[:8]} entry price impact {impact_pct:.2f}% "
                         f"> MAX_PRICE_IMPACT_PCT ({MAX_PRICE_IMPACT_PCT}%). Position too large for this pool."
                     )
-                    if current_mode == "PAPER":
-                        async with STATE._lock:
-                            STATE.credit_balance(trade_size)
                     continue
 
                 # ── Entry price: the executable fill, not a DexScreener mid ───────────
@@ -1437,18 +1527,21 @@ async def record_trade(trade_data: dict):
                 quoted_entry_price = price_from_quote(buy_route, lamports, token_decimals, sol_price)
                 if quoted_entry_price <= 0:
                     log.warning(f"Trade Rejected: could not derive an executable entry price for {token_address[:8]}.")
-                    if current_mode == "PAPER":
-                        async with STATE._lock:
-                            STATE.credit_balance(trade_size)
                     continue
 
-                if entry_price > 0:
-                    drift_pct = ((quoted_entry_price - entry_price) / entry_price) * 100
+                # Fresh (uncached) mid at the moment of entry. This is the reference the
+                # monitor compares live mids against; the screen price above may be up to
+                # 5 minutes stale.
+                entry_mid_price = await get_live_price(token_address)
+                if entry_mid_price <= 0:
+                    entry_mid_price = entry_price if entry_price > 0 else quoted_entry_price
+
+                if entry_mid_price > 0:
+                    drift_pct = ((quoted_entry_price - entry_mid_price) / entry_mid_price) * 100
                     if abs(drift_pct) > 10.0:
                         log.info(
-                            f"Entry price correction for {token_address[:8]}: screen mid ${entry_price:.8f} -> "
-                            f"executable ${quoted_entry_price:.8f} ({drift_pct:+.1f}%). "
-                            f"Booking the executable price."
+                            f"Entry fill for {token_address[:8]}: mid ${entry_mid_price:.8f} -> "
+                            f"executable ${quoted_entry_price:.8f} ({drift_pct:+.1f}%)."
                         )
                 entry_price = quoted_entry_price
 
@@ -1458,15 +1551,12 @@ async def record_trade(trade_data: dict):
                     confidence = prob * 100.0
                     if confidence < ML_CONFIDENCE:
                         log.info(f"ML ENGINE REJECTED TRADE: {token_address}. Confidence {confidence:.2f}% < {ML_CONFIDENCE}% threshold.")
-                        if current_mode == "PAPER":
-                            async with STATE._lock:
-                                STATE.credit_balance(trade_size)
                         continue
                     else:
                         log.info(f"ML ENGINE APPROVED TRADE: {token_address}. Confidence {confidence:.2f}% >= {ML_CONFIDENCE}%.")
 
                 # ── LIVE: GMGN Execution ──────────────────────────────────────────────
-                if current_mode in ["LIVE", "TRUE"]:
+                if _is_live():
 
                     try:
                         wallet_address = str(Keypair.from_base58_string(WALLET_PRIVATE_KEY).pubkey())
@@ -1548,7 +1638,9 @@ async def record_trade(trade_data: dict):
                         mode=TRADE_MODE,
                         execution_engine="GMGN",
                         strategy_order_id=strategy_order_id,
+                        entry_mid_price=entry_mid_price,
                     )
+                    pos.consensus_whales = set(recent_whales)
                     async with _dashboard_lock:
                         STATE.add_position(token_address, pos)
 
@@ -1592,21 +1684,30 @@ async def record_trade(trade_data: dict):
                         entry_time=entry_time.isoformat(),
                         mode=TRADE_MODE,
                         execution_engine="JUPITER",
+                        entry_mid_price=entry_mid_price,
                     )
+                    pos.consensus_whales = set(recent_whales)
                     async with _dashboard_lock:
                         STATE.add_position(token_address, pos)
+                    paper_debited = 0.0  # capital is now held by the position; do not refund
 
                     task = asyncio.create_task(
                         monitor_position(wallet, token_address, entry_price, entry_time,
                                          trade_size, actual_entry_cost_usd=actual_entry_cost_usd,
-                                         tokens_held=tokens_held, token_decimals=token_decimals)
+                                         tokens_held=tokens_held, token_decimals=token_decimals,
+                                         entry_mid_price=entry_mid_price)
                     )
                     _background_tasks.add(task)
                     task.add_done_callback(_background_tasks.discard)
 
             else:
                 log.warning(f"Could not get Jupiter entry price for {token_address}.")
+        except Exception as e:
+            log.error(f"Unhandled error evaluating {token_address[:8]} from {wallet[:8]}: {e!r}", exc_info=True)
         finally:
+            if paper_debited > 0:
+                async with STATE._lock:
+                    STATE.credit_balance(paper_debited)
             _processing_tokens.discard(token_address)
             _pending_trades -= 1
 
