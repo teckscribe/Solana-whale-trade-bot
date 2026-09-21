@@ -1110,6 +1110,28 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
             )
             return False
 
+        # ── Phantom Stop-Loss / Reclassification Defense ──────────────────────
+        # If DexScreener mid-price triggered STOP_LOSS, but the real Jupiter fill is POSITIVE:
+        if reason.startswith("STOP_LOSS") and net_profit_pct >= 0.0:
+            if net_profit_pct >= TAKE_PROFIT_PCT:
+                # The token actually reached Take-Profit territory on the real exchange!
+                # Close it, but reclassify to TAKE_PROFIT so records and alerts are accurate.
+                log.info(
+                    f"🎯 RECLASSIFYING EXIT for {token[:8]}: Triggered as STOP_LOSS due to mid divergence, "
+                    f"but Jupiter executable fill is actually +{net_profit_pct:.2f}% (>= TP {TAKE_PROFIT_PCT}%). "
+                    f"Recording as TAKE_PROFIT."
+                )
+                reason = "TAKE_PROFIT"
+            else:
+                # The token is still positive / in profit.
+                # Do NOT sell a winning position on a false DexScreener mid-dip!
+                log.warning(
+                    f"⚠️ PHANTOM STOP-LOSS REJECTED for {token[:8]}: DexScreener mid triggered STOP_LOSS, "
+                    f"but real Jupiter executable fill is actually in profit ({net_profit_pct:+.2f}%). "
+                    f"Refusing to stop-out a profitable position on oracle noise — continuing to hold."
+                )
+                return False
+
         if fixed_cost_pct > 2.0:
             log.warning(
                 f"Fixed costs are {fixed_cost_pct:.2f}% of this ${trade_size:.2f} trade "
@@ -1213,8 +1235,8 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
         if pos and isinstance(pos, Position):
             pos.revert_exit()
 
-        # If close was rejected intentionally (e.g. phantom profit rejection), do NOT treat as an RPC failure
-        if reason.startswith(("TAKE_PROFIT", "TRAILING_STOP")):
+        # If close was rejected intentionally (e.g. phantom profit or phantom stop-loss rejection), do NOT treat as an RPC failure
+        if reason.startswith(("TAKE_PROFIT", "TRAILING_STOP", "STOP_LOSS")):
             return False
 
         close_retry_count += 1
