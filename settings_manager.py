@@ -30,7 +30,7 @@ def _s(key: str, type_: str, default: Any, min_val: float = None, max_val: float
 
 SPEC = [
     _s("TRADE_MODE", "choice", "PAPER", options=["PAPER", "LIVE", "TRUE", "FALSE"], group="General", help_="Trading mode"),
-    _s("ALLOCATION_PCT", "float", 50.0, min_val=1.0, max_val=100.0, group="Risk", help_="Percent of balance to allocate per trade"),
+    _s("ALLOCATION_PCT", "float", 25.0, min_val=1.0, max_val=100.0, group="Risk", help_="Percent of balance to allocate per trade"),
     _s("TAKE_PROFIT_PCT", "float", 20.0, min_val=1.0, max_val=500.0, group="Risk", help_="Take profit percentage"),
     _s("STOP_LOSS_PCT", "float", -12.0, min_val=-50.0, max_val=-0.5, group="Risk", help_="Stop loss percentage (negative)"),
     _s("TIMEOUT_ENABLED", "bool", True, group="Risk", help_="Enable time-based exit"),
@@ -43,6 +43,7 @@ SPEC = [
     _s("MOMENTUM_FILTER_ENABLED", "bool", True, group="Filter", help_="Enable momentum filter"),
     _s("MAX_M5_PUMP_PCT", "float", 80.0, min_val=0.0, max_val=1000.0, group="Filter", help_="Maximum 5m pump percentage"),
     _s("PAPER_FEE_PCT_PER_LEG", "float", 1.0, min_val=0.0, max_val=5.0, group="Fees", help_="Paper trading fee percentage per leg"),
+    _s("ATA_RENT_RECLAIMED", "bool", True, group="Fees", help_="Assume Associated Token Account (ATA) rent is reclaimed upon closing"),
     _s("MAX_PRICE_IMPACT_PCT", "float", 3.0, min_val=0.1, max_val=20.0, group="Risk", help_="Maximum acceptable price impact"),
     _s("MAX_POOL_SHARE_PCT", "float", 1.0, min_val=0.1, max_val=10.0, group="Risk", help_="Maximum share of pool liquidity"),
     _s("MAX_PORTFOLIO_EXPOSURE_PCT", "float", 100.0, min_val=10.0, max_val=100.0, group="Risk", help_="Max portfolio exposure percentage"),
@@ -50,8 +51,8 @@ SPEC = [
     _s("LIVE_FEE_RESERVE_SOL", "float", 0.01, min_val=0.001, max_val=1.0, group="Risk", help_="SOL reserve left unallocated for fees"),
     _s("GMGN_DISCOVERY_ENABLED", "bool", True, group="General", help_="Enable GMGN discovery"),
     _s("DISCOVERY_INTERVAL_MINUTES", "int", 10, min_val=1, max_val=60, group="General", help_="Interval for discovery in minutes"),
-    _s("PAPER_BALANCE_USD", "float", 25.0, min_val=1.0, max_val=100000.0, group="General", help_="Starting paper balance in USD"),
-    _s("PAPER_WALLET_BALANCE", "float", 25.0, min_val=0.0, max_val=100000.0, group="General", help_="Current simulated paper wallet balance in USD"),
+    _s("PAPER_BALANCE_USD", "float", 100.0, min_val=1.0, max_val=100000.0, group="General", help_="Starting paper balance in USD"),
+    _s("PAPER_WALLET_BALANCE", "float", 100.0, min_val=0.0, max_val=100000.0, group="General", help_="Current simulated paper wallet balance in USD"),
     _s("POLL_INTERVAL", "float", 2.0, min_val=1.0, max_val=30.0, group="General", help_="Polling interval (dynamically computed in trade_brain)"),
     _s("MAX_RESUME_AGE_HOURS", "float", 2.0, min_val=0.1, max_val=48.0, group="General", help_="Maximum age in hours of saved positions to resume on startup"),
     _s("TRAILING_STOP_ENABLED", "bool", True, group="Risk", help_="Enable high-water-mark trailing stop"),

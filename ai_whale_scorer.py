@@ -65,6 +65,29 @@ class WhaleScore:
         return asdict(self)
 
 
+def _get_copy_performance(wallet: str) -> Optional[dict]:
+    """Inspects WTB's actual recorded copy-trading performance for this whale in ml_training_data.json."""
+    try:
+        if not os.path.exists("ml_training_data.json"):
+            return None
+        with open("ml_training_data.json", "r") as f:
+            trades = json.load(f)
+        whale_trades = [t for t in trades if t.get("whale_wallet") == wallet]
+        if not whale_trades:
+            return None
+        wins = [t for t in whale_trades if t.get("net_profit_usd", 0) > 0]
+        total_pnl = sum(t.get("net_profit_usd", 0) for t in whale_trades)
+        winrate = (len(wins) / len(whale_trades)) * 100.0
+        return {
+            "trades": len(whale_trades),
+            "wins": len(wins),
+            "winrate": winrate,
+            "total_pnl": total_pnl
+        }
+    except Exception:
+        return None
+
+
 def _heuristic_score(wallet: str, data: dict) -> WhaleScore:
     """
     Deterministic rule-based scoring gauntlet when no LLM API key is present.
@@ -79,13 +102,19 @@ def _heuristic_score(wallet: str, data: dict) -> WhaleScore:
     red_flags = []
     style = []
 
-    # 1. Toxic Dev check
+    # 1. Toxic Dev / Deployer check
     if any(t in tags for t in ["top_dev", "dev", "token_creator", "deployer"]):
         red_flags.append("toxic_dev")
         score -= 50
 
-    # 2. MEV / Bot check
-    if any(t in tags for t in ["mev", "sniper", "banana", "padre", "trojan", "maestro"]):
+    # 2. MEV / Bot / High-Frequency Sniper check
+    # These platforms execute atomic block-0 bundles or sub-second scalps that standard RPC copy-bots cannot copy.
+    SNIPER_BOT_TAGS = [
+        "mev", "sniper", "banana", "padre", "trojan", "maestro",
+        "photon", "axiom", "bloom", "bullx", "arbitrager", "arbitrageur",
+        "frontrunner", "sandwich"
+    ]
+    if any(t in tags for t in SNIPER_BOT_TAGS):
         red_flags.append("mev")
         red_flags.append("bot")
         score -= 40
@@ -93,12 +122,17 @@ def _heuristic_score(wallet: str, data: dict) -> WhaleScore:
         red_flags.append("bot")
         score -= 30
     elif trades > 150:
-        score -= 10
+        score -= 15
 
-    # 3. Winrate evaluation
-    if winrate >= 75.0:
+    # 3. Inactive / Zero recent trades
+    if trades == 0:
+        red_flags.append("inactive")
+        score -= 25
+
+    # 4. Winrate evaluation
+    if winrate >= 75.0 and trades >= 5:
         score += 20
-    elif winrate >= 65.0:
+    elif winrate >= 65.0 and trades >= 5:
         score += 10
     elif winrate < 45.0 and winrate > 0.0:
         red_flags.append("low_winrate")
@@ -107,7 +141,7 @@ def _heuristic_score(wallet: str, data: dict) -> WhaleScore:
         red_flags.append("low_winrate")
         score -= 30
 
-    # 4. Profitability
+    # 5. Profitability
     if profit >= 20000.0:
         score += 15
     elif profit >= 5000.0:
@@ -115,13 +149,21 @@ def _heuristic_score(wallet: str, data: dict) -> WhaleScore:
     elif profit < 0.0:
         score -= 20
 
-    # 5. One-hit wonder check
+    # 6. Empirical WTB Copy-Trading Performance Feedback
+    # If our own bot already tried copying this whale and consistently lost money, penalize heavily.
+    copy_perf = _get_copy_performance(wallet)
+    if copy_perf and copy_perf["trades"] >= 3:
+        if copy_perf["winrate"] < 25.0 or copy_perf["total_pnl"] < -2.0:
+            red_flags.append("toxic_copy_history")
+            score -= 50
+
+    # 7. One-hit wonder check
     if trades < 6 and profit > 10000.0:
         red_flags.append("one-hit")
         score -= 15
 
-    # 6. Style classification
-    if "bot" in red_flags:
+    # 8. Style classification
+    if "bot" in red_flags or "mev" in red_flags:
         style.append("scalper")
     elif trades <= 60 and winrate >= 60.0:
         style.append("swing")
@@ -131,19 +173,19 @@ def _heuristic_score(wallet: str, data: dict) -> WhaleScore:
     else:
         style.append("copy-follower")
 
-    # Smart degen bonus
-    if any(t in tags for t in ["smart_degen", "smart_money"]):
+    # Smart degen bonus (only if not a sniper bot or toxic dev or toxic copy history)
+    if not red_flags and any(t in tags for t in ["smart_degen", "smart_money"]):
         score += 10
 
     # Hard ceiling caps on critical toxicity
-    if "toxic_dev" in red_flags:
+    if "toxic_dev" in red_flags or "toxic_copy_history" in red_flags:
         score = min(score, 20)
     elif "mev" in red_flags or "bot" in red_flags:
         score = min(score, 30)
 
     score = max(0, min(100, score))
 
-    if "toxic_dev" in red_flags or "mev" in red_flags or score < 45:
+    if "toxic_dev" in red_flags or "toxic_copy_history" in red_flags or "mev" in red_flags or score < 45:
         status = "BLACKLIST"
     elif score >= 70:
         status = "WHITELIST"

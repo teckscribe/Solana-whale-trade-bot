@@ -62,7 +62,7 @@ SOL_BASE_TX_FEE = 0.000005
 PRIORITY_FEE_SOL = float(os.getenv("GMGN_PRIORITY_FEE", "0.00001"))
 TIP_FEE_SOL = float(os.getenv("GMGN_TIP_FEE", "0.00001"))
 ATA_RENT_SOL = float(os.getenv("ATA_RENT_SOL", "0.00204"))
-ATA_RENT_RECLAIMED = os.getenv("ATA_RENT_RECLAIMED", "FALSE").strip().upper() == "TRUE"
+ATA_RENT_RECLAIMED = bool(settings_manager.get("ATA_RENT_RECLAIMED"))
 
 POLL_INTERVAL = max(2.0, (60 * MAX_CONCURRENT_TRADES) / 280.0)
 
@@ -79,6 +79,7 @@ def _refresh_settings():
     global MAX_PORTFOLIO_EXPOSURE_PCT, POLL_INTERVAL, LIVE_TRADES_FILE, WALLET_FILE
     global TRAILING_STOP_ENABLED, TRAILING_STOP_ACTIVATION_PCT, TRAILING_STOP_CALLBACK_PCT
     global WAVE_FILTER_ENABLED, WAVE_WINDOW_SECONDS, WAVE_MIN_WALLETS, WAVE_MAX_BUY_SOL
+    global ATA_RENT_RECLAIMED
     try:
         TRADE_MODE = settings_manager.get("TRADE_MODE")
         ALLOCATION_PCT = float(settings_manager.get("ALLOCATION_PCT"))
@@ -106,6 +107,7 @@ def _refresh_settings():
         WAVE_WINDOW_SECONDS = int(settings_manager.get("WAVE_WINDOW_SECONDS"))
         WAVE_MIN_WALLETS = int(settings_manager.get("WAVE_MIN_WALLETS"))
         WAVE_MAX_BUY_SOL = float(settings_manager.get("WAVE_MAX_BUY_SOL"))
+        ATA_RENT_RECLAIMED = bool(settings_manager.get("ATA_RENT_RECLAIMED"))
         POLL_INTERVAL = max(2.0, (60 * MAX_CONCURRENT_TRADES) / 280.0)
 
         if TRADE_MODE == "PAPER":
@@ -1064,6 +1066,12 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
     fixed_cost_pct = (fixed_cost_usd / trade_size * 100) if trade_size > 0 else 0.0
 
     if executable_exit_price <= 0:
+        if reason.startswith(("TAKE_PROFIT", "TRAILING_STOP")):
+            log.warning(
+                f"⚠️ PHANTOM PROFIT REJECTED for {token[:8]}: Triggered by {reason}, "
+                f"but Jupiter returned no executable quote at this moment. Refusing to book loss — continuing to hold."
+            )
+            return False
         log.warning(
             f"PAPER EXIT: no sell route for {tokens_held:.4f} of {token[:8]} "
             f"(size ${trade_size:.2f}). Position is unsellable — booking -100%."
@@ -1087,6 +1095,20 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
         net_profit_usd = trade_size * ((gross_pct - proportional_pct) / 100) - fixed_cost_usd
         net_profit_pct = (net_profit_usd / trade_size * 100) if trade_size > 0 else 0.0
         real_exit_proceeds_usd = trade_size + net_profit_usd
+
+        # ── Phantom Take-Profit Defense ───────────────────────────────────────
+        # If DexScreener mid-price or trailing high-water-mark triggered a profit exit,
+        # but the real Jupiter executable fill nets a loss (due to illiquidity, spread, or fees),
+        # refuse to sell at a loss under the guise of "TAKE_PROFIT". Keep holding until real
+        # executable profit is possible or downside stop-loss triggers.
+        if reason.startswith(("TAKE_PROFIT", "TRAILING_STOP")) and net_profit_pct < 0.0:
+            log.warning(
+                f"⚠️ PHANTOM PROFIT REJECTED for {token[:8]}: Triggered by {reason}, "
+                f"but real Jupiter executable quote yields net {net_profit_pct:.2f}% (${net_profit_usd:.2f}) "
+                f"due to pool illiquidity/fees ({proportional_pct:.1f}% fee + ${fixed_cost_usd:.2f} fixed). "
+                f"Refusing to exit at a loss on a profit signal — continuing to hold."
+            )
+            return False
 
         if fixed_cost_pct > 2.0:
             log.warning(
@@ -1190,6 +1212,10 @@ async def monitor_position(wallet: str, token: str, entry_price: float, entry_ti
 
         if pos and isinstance(pos, Position):
             pos.revert_exit()
+
+        # If close was rejected intentionally (e.g. phantom profit rejection), do NOT treat as an RPC failure
+        if reason.startswith(("TAKE_PROFIT", "TRAILING_STOP")):
+            return False
 
         close_retry_count += 1
         if close_retry_count >= MAX_CLOSE_RETRIES:

@@ -118,6 +118,41 @@ class TestAIWhaleScorer(unittest.TestCase):
         self.assertEqual(whale_manager.get_whale_status("ToxicDev11111111111111111111111111111111111"), "BLACKLIST")
         self.assertIn("GoodWhale1111111111111111111111111111111111", whale_manager.get_whitelist_set())
 
+    def test_heuristic_flags_photon_axiom_snipers(self):
+        """Wallets with 'photon', 'axiom', or 'arbitrager' tags must be flagged as MEV/bot and BLACKLIST."""
+        for tag in ["photon", "axiom", "bloom", "arbitrager"]:
+            data = {
+                "winrate_7d": 80.0,
+                "trades_7d": 50,
+                "profit_7d": 5000.0,
+                "tags": ["smart_degen", tag],
+            }
+            res = _heuristic_score(f"Sniper_{tag}_Wallet1111111111111111111", data)
+            self.assertIn("mev", res.red_flags, f"Tag {tag} should trigger mev flag")
+            self.assertIn("bot", res.red_flags, f"Tag {tag} should trigger bot flag")
+            self.assertEqual(res.status, "BLACKLIST")
+            self.assertLessEqual(res.score, 30)
+
+    @mock.patch("ai_whale_scorer._get_copy_performance")
+    def test_heuristic_flags_toxic_copy_history(self, mock_copy_perf):
+        """Whales with negative copy-trading PnL in WTB must be flagged as toxic_copy_history and BLACKLIST."""
+        mock_copy_perf.return_value = {
+            "trades": 10,
+            "wins": 0,
+            "winrate": 0.0,
+            "total_pnl": -15.50
+        }
+        data = {
+            "winrate_7d": 90.0,
+            "trades_7d": 40,
+            "profit_7d": 10000.0,
+            "tags": ["smart_degen"],
+        }
+        res = _heuristic_score("LossWhale1111111111111111111111111111111111", data)
+        self.assertIn("toxic_copy_history", res.red_flags)
+        self.assertEqual(res.status, "BLACKLIST")
+        self.assertLessEqual(res.score, 20)
+
 
 if __name__ == "__main__":
     unittest.main()
