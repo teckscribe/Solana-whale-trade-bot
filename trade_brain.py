@@ -53,6 +53,11 @@ MAX_PRICE_IMPACT_PCT = float(settings_manager.get("MAX_PRICE_IMPACT_PCT"))
 MAX_POOL_SHARE_PCT = float(settings_manager.get("MAX_POOL_SHARE_PCT"))
 MAX_PORTFOLIO_EXPOSURE_PCT = float(settings_manager.get("MAX_PORTFOLIO_EXPOSURE_PCT"))
 
+WAVE_FILTER_ENABLED = bool(settings_manager.get("WAVE_FILTER_ENABLED"))
+WAVE_WINDOW_SECONDS = int(settings_manager.get("WAVE_WINDOW_SECONDS"))
+WAVE_MIN_WALLETS = int(settings_manager.get("WAVE_MIN_WALLETS"))
+WAVE_MAX_BUY_SOL = float(settings_manager.get("WAVE_MAX_BUY_SOL"))
+
 SOL_BASE_TX_FEE = 0.000005
 PRIORITY_FEE_SOL = float(os.getenv("GMGN_PRIORITY_FEE", "0.00001"))
 TIP_FEE_SOL = float(os.getenv("GMGN_TIP_FEE", "0.00001"))
@@ -73,6 +78,7 @@ def _refresh_settings():
     global PAPER_FEE_PCT_PER_LEG, MAX_PRICE_IMPACT_PCT, MAX_POOL_SHARE_PCT
     global MAX_PORTFOLIO_EXPOSURE_PCT, POLL_INTERVAL, LIVE_TRADES_FILE, WALLET_FILE
     global TRAILING_STOP_ENABLED, TRAILING_STOP_ACTIVATION_PCT, TRAILING_STOP_CALLBACK_PCT
+    global WAVE_FILTER_ENABLED, WAVE_WINDOW_SECONDS, WAVE_MIN_WALLETS, WAVE_MAX_BUY_SOL
     try:
         TRADE_MODE = settings_manager.get("TRADE_MODE")
         ALLOCATION_PCT = float(settings_manager.get("ALLOCATION_PCT"))
@@ -96,6 +102,10 @@ def _refresh_settings():
         TRAILING_STOP_ENABLED = bool(settings_manager.get("TRAILING_STOP_ENABLED"))
         TRAILING_STOP_ACTIVATION_PCT = float(settings_manager.get("TRAILING_STOP_ACTIVATION_PCT"))
         TRAILING_STOP_CALLBACK_PCT = float(settings_manager.get("TRAILING_STOP_CALLBACK_PCT"))
+        WAVE_FILTER_ENABLED = bool(settings_manager.get("WAVE_FILTER_ENABLED"))
+        WAVE_WINDOW_SECONDS = int(settings_manager.get("WAVE_WINDOW_SECONDS"))
+        WAVE_MIN_WALLETS = int(settings_manager.get("WAVE_MIN_WALLETS"))
+        WAVE_MAX_BUY_SOL = float(settings_manager.get("WAVE_MAX_BUY_SOL"))
         POLL_INTERVAL = max(2.0, (60 * MAX_CONCURRENT_TRADES) / 280.0)
 
         if TRADE_MODE == "PAPER":
@@ -156,7 +166,90 @@ class TradingState:
         # token -> {wallet: signal_ts}. Whitelisted whale buys seen recently, so a second
         # whale buying the same token within the window counts as consensus.
         self.recent_buy_signals: Dict[str, Dict[str, float]] = {}
+        # Anti-Seeder / Wave Attack tracking (FOMO Radar provenance algorithm)
+        self.token_buy_history: Dict[str, list] = {}
+        self.seeded_blacklist: set = set()
+        self._load_seeded_blacklist()
         self._lock = asyncio.Lock()
+
+    def _save_seeded_blacklist(self):
+        try:
+            os.makedirs("data", exist_ok=True)
+            with open(os.path.join("data", "seeded_blacklist.json"), "w") as f:
+                json.dump(sorted(list(self.seeded_blacklist)), f, indent=2)
+        except Exception as e:
+            log.warning(f"Failed to persist seeded blacklist: {e}")
+
+    def _load_seeded_blacklist(self):
+        path = os.path.join("data", "seeded_blacklist.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    self.seeded_blacklist = set(json.load(f))
+            except Exception as e:
+                log.warning(f"Failed to load seeded blacklist: {e}")
+
+    def detect_seeder_wave(
+        self,
+        token_address: str,
+        wallet: str,
+        sol_spent: float,
+        now_ts: float,
+        window_seconds: int = 300,
+        min_wallets: int = 2,
+        max_buy_sol: float = 0.2
+    ) -> tuple[bool, str]:
+        """
+        Anti-Seeder / Wave Attack Detector (adapted from FOMO Radar provenance).
+        
+        Detects programmatic, rapid small-size buys into multiple whitelisted
+        wallets within a narrow time window designed to simulate consensus.
+        """
+        if token_address in self.seeded_blacklist:
+            return True, f"Token {token_address[:8]} is already blacklisted as a seeded wave attack target"
+
+        history = self.token_buy_history.setdefault(token_address, [])
+        # Prune old events outside window
+        history = [e for e in history if now_ts - e["ts"] <= window_seconds]
+        self.token_buy_history[token_address] = history
+
+        recent_by_wallet = {}
+        for e in history:
+            w = e["wallet"]
+            if w not in recent_by_wallet:
+                recent_by_wallet[w] = e
+
+        all_wallets = set(recent_by_wallet.keys()) | {wallet}
+
+        if len(all_wallets) >= min_wallets:
+            all_sizes = [e.get("sol_spent", 0.0) for e in recent_by_wallet.values() if e.get("sol_spent", 0.0) > 0]
+            if sol_spent > 0:
+                all_sizes.append(sol_spent)
+
+            if all_sizes:
+                median_size = sorted(all_sizes)[len(all_sizes) // 2]
+                all_small = all(s <= max_buy_sol for s in all_sizes)
+
+                all_ts = sorted([e["ts"] for e in recent_by_wallet.values()] + [now_ts])
+                gaps = [all_ts[i] - all_ts[i-1] for i in range(1, len(all_ts))]
+                tight_queue = all(g <= 45.0 for g in gaps) if gaps else False
+
+                if (all_small and median_size <= max_buy_sol) or (tight_queue and median_size <= max_buy_sol * 1.5):
+                    reason = (
+                        f"Detected {len(all_wallets)} whitelisted wallets buying {token_address[:8]} within "
+                        f"{window_seconds}s with suspicious small/uniform size (median {median_size:.3f} SOL, "
+                        f"queue gaps: {[round(g, 1) for g in gaps]}s). Flagged as seeder wave attack, blacklisting token."
+                    )
+                    self.seeded_blacklist.add(token_address)
+                    self._save_seeded_blacklist()
+                    return True, reason
+
+        history.append({
+            "wallet": wallet,
+            "sol_spent": sol_spent,
+            "ts": now_ts
+        })
+        return False, ""
 
     def request_exit(self, token: str, reason: str):
         self.exit_requests[token] = reason
@@ -228,8 +321,9 @@ else:
     LIVE_TRADES_FILE = "live_trades.json"
     WALLET_FILE = "live_wallet.json"
 
+SOL_MINT = "So11111111111111111111111111111111111111112"
 IGNORE_MINTS = [
-    "So11111111111111111111111111111111111111112", # WSOL
+    SOL_MINT, # WSOL
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", # USDC
     "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", # USDT
 ]
@@ -1283,14 +1377,6 @@ async def record_trade(trade_data: dict):
             log.info(f"Skipping {token_address} - Matched stablecoin/WSOL keyword.")
             continue
 
-        if token_address in _processing_tokens:
-            log.info(f"Token {token_address[:8]} is already being processed. Skipping duplicate API event.")
-            continue
-
-        # Consensus: how many distinct whitelisted whales bought this token recently.
-        recent_whales = set(STATE.recent_buy_signals.get(token_address, {}).keys()) | {wallet}
-        is_consensus = len(recent_whales) >= 2
-
         async with _dashboard_lock:
             pos = STATE.get_position(token_address)
             if pos is not None:
@@ -1305,6 +1391,34 @@ async def record_trade(trade_data: dict):
                 else:
                     log.info(f"Token {token_address[:8]} is already being tracked. Skipping.")
                 continue
+
+        if token_address in STATE.seeded_blacklist:
+            log.info(f"Skipping {token_address[:8]} - Blacklisted as seeded wave attack token.")
+            continue
+
+        # Wave / Seeder Attack Defense (FOMO Radar provenance algorithm for new entries)
+        if WAVE_FILTER_ENABLED:
+            sold_sol = next((s.get("amount", 0.0) for s in trade_data.get("sold", []) if s.get("mint") == SOL_MINT), 0.0)
+            is_wave, wave_reason = STATE.detect_seeder_wave(
+                token_address=token_address,
+                wallet=wallet,
+                sol_spent=sold_sol,
+                now_ts=now_ts,
+                window_seconds=WAVE_WINDOW_SECONDS,
+                min_wallets=WAVE_MIN_WALLETS,
+                max_buy_sol=WAVE_MAX_BUY_SOL
+            )
+            if is_wave:
+                log.warning(f"⚠️ TRADE REJECTED (Seeder Wave Attack): {wave_reason}")
+                continue
+
+        if token_address in _processing_tokens:
+            log.info(f"Token {token_address[:8]} is already being processed. Skipping duplicate API event.")
+            continue
+
+        # Consensus: how many distinct whitelisted whales bought this token recently.
+        recent_whales = set(STATE.recent_buy_signals.get(token_address, {}).keys()) | {wallet}
+        is_consensus = len(recent_whales) >= 2
 
         if is_consensus:
             log.info(f"🔥 MULTI-WHALE CONSENSUS SIGNAL for {token_address[:8]}! Whales: {[w[:8] for w in recent_whales]}")

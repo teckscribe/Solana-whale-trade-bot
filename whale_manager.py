@@ -344,3 +344,13 @@ def get_discovery_data() -> dict:
 def get_whitelist_data() -> dict:
     """Returns a shallow copy of the whitelist database for read-only access."""
     return dict(_whitelist_data)
+
+
+def audit_whitelist(auto_prune: bool = True) -> dict:
+    """
+    Runs the AI Whale Scorer across all whitelisted wallets.
+    Demotes toxic or low-score whales to BLACKLIST in discovery_db.json.
+    """
+    import ai_whale_scorer
+    return ai_whale_scorer.audit_all_whales(whitelist_path=WHITELIST_FILE, auto_prune=auto_prune)
+

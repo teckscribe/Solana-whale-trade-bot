@@ -62,6 +62,10 @@ SPEC = [
     _s("JITO_DYNAMIC_TIP", "bool", True, group="Execution", help_="Dynamically fetch tip floor percentiles"),
     _s("JITO_TIP_PERCENTILE", "choice", "p50", options=["p25", "p50", "p75", "p95"], group="Execution", help_="Target tip floor percentile"),
     _s("JITO_BLOCK_ENGINE_REGION", "choice", "mainnet", options=["mainnet", "amsterdam", "frankfurt", "ny", "tokyo"], group="Execution", help_="Jito block engine region"),
+    _s("WAVE_FILTER_ENABLED", "bool", True, group="Risk", help_="Reject coordinated small-size multi-wallet seeder wave attacks"),
+    _s("WAVE_WINDOW_SECONDS", "int", 300, min_val=30, max_val=1800, group="Risk", help_="Time window in seconds to detect multi-wallet entry waves"),
+    _s("WAVE_MIN_WALLETS", "int", 2, min_val=2, max_val=10, group="Risk", help_="Minimum whitelisted wallets in a window to trigger wave analysis"),
+    _s("WAVE_MAX_BUY_SOL", "float", 0.2, min_val=0.01, max_val=5.0, group="Risk", help_="Maximum individual buy size in SOL to flag as suspicious wave dust"),
 ]
 
 SPEC_BY_KEY = {e["key"]: e for e in SPEC}

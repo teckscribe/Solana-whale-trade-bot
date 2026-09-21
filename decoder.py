@@ -17,8 +17,15 @@ import logging
 import asyncio
 import random
 from dotenv import load_dotenv
-from solana.rpc.async_api import AsyncClient
-from solders.signature import Signature
+
+try:
+    from solana.rpc.async_api import AsyncClient
+    from solders.signature import Signature
+    SOLANA_INSTALLED = True
+except ImportError:
+    AsyncClient = None
+    Signature = None
+    SOLANA_INSTALLED = False
 
 load_dotenv()
 log = logging.getLogger("WhaleDecoder")
@@ -62,7 +69,7 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
     log.info(f"Decoding TX: {signature_str}")
     _decode_stats["total_attempts"] += 1
     try:
-        sig = Signature.from_string(signature_str)
+        sig = Signature.from_string(signature_str) if Signature and hasattr(Signature, "from_string") else signature_str
         
         # Initial delay — WSS delivers notifications faster than RPC indexes them
         await asyncio.sleep(INITIAL_SLEEP)
@@ -147,15 +154,44 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
         process_balances(pre_balances, is_post=False)
         process_balances(post_balances, is_post=True)
         
-        # Extract native SOL changes for the whale
+        # Extract native SOL changes and verify signer provenance for the whale
         try:
-            account_keys = tx.transaction.message.account_keys
+            msg = getattr(tx.transaction, "message", None)
+            account_keys = getattr(msg, "account_keys", []) if msg else []
             whale_index = -1
             for i, key in enumerate(account_keys):
                 key_str = str(key.pubkey) if hasattr(key, 'pubkey') else str(key)
                 if key_str == whale_wallet:
                     whale_index = i
                     break
+            
+            # Signer Provenance Check (FOMO Radar defense against third-party router injection/airdrops)
+            is_signer = False
+            if msg is not None and whale_index != -1:
+                if hasattr(msg, "is_signer"):
+                    try:
+                        is_signer = bool(msg.is_signer(whale_index))
+                    except Exception:
+                        pass
+                if not is_signer and hasattr(msg, "header"):
+                    hdr = getattr(msg, "header", None)
+                    num_sigs = getattr(hdr, "num_required_signatures", None)
+                    if isinstance(num_sigs, int) and whale_index < num_sigs:
+                        is_signer = True
+                elif not is_signer and isinstance(msg, dict):
+                    hdr = msg.get("header", {})
+                    num_sigs = hdr.get("numRequiredSignatures", None) if isinstance(hdr, dict) else getattr(hdr, "num_required_signatures", None)
+                    if isinstance(num_sigs, int) and whale_index < num_sigs:
+                        is_signer = True
+                elif not is_signer and hasattr(key, 'signer'):
+                    is_signer = bool(getattr(account_keys[whale_index], 'signer', False))
+
+            if whale_index == -1 or not is_signer:
+                log.info(
+                    f"Provenance check failed: {whale_wallet[:8]} was not an authorized signer on TX {signature_str[:10]}. "
+                    "Unsolicited airdrop, third-party router injection, or passive transfer. Ignoring."
+                )
+                return None
                     
             if whale_index != -1 and meta.pre_balances and meta.post_balances:
                 pre_sol = meta.pre_balances[whale_index] / 1_000_000_000
@@ -169,7 +205,7 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
                         changes[SOL_MINT] = 0.0
                     changes[SOL_MINT] += sol_delta
         except Exception as e:
-            log.warning(f"Failed to parse native SOL balances for {signature_str}: {e}")
+            log.warning(f"Failed to parse native SOL balances / provenance for {signature_str}: {e}")
         
         # Identify bought and sold tokens
         bought = []

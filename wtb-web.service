@@ -14,6 +14,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=wtb-web
 Environment=PYTHONUNBUFFERED=1
+Environment=WEB_PORT=8101
 
 [Install]
 WantedBy=multi-user.target

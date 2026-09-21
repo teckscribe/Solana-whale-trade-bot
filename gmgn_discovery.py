@@ -219,6 +219,22 @@ async def run_gmgn_discovery() -> set:
                 
                 if (has_high_winrate or has_high_profit) and total_trades >= GMGN_MIN_TRADES and has_enough_sol:
                     
+                    # 4b. AI Whale Scorer pre-screening (FOMO Radar style vetting)
+                    try:
+                        import ai_whale_scorer
+                        ai_score = ai_whale_scorer.score_wallet(addr, detailed_stats)
+                        if ai_score.status == "BLACKLIST" or ai_score.score < 45:
+                            log.info(
+                                f"Rejected GMGN wallet {addr[:8]} via AI Scorer: Score {ai_score.score}, "
+                                f"Flags: {ai_score.red_flags}. Summary: {ai_score.summary}"
+                            )
+                            continue
+                        detailed_stats["ai_score"] = ai_score.score
+                        detailed_stats["ai_style"] = ai_score.style
+                        detailed_stats["ai_flags"] = ai_score.red_flags
+                    except Exception as ai_e:
+                        log.debug(f"AI Scorer pre-screening skipped: {ai_e}")
+
                     # 5. Send to Telegram for approval
                     from telegram_notifier import send_gmgn_wallet_approval
                     send_gmgn_wallet_approval(detailed_stats)
@@ -227,7 +243,10 @@ async def run_gmgn_discovery() -> set:
                     _already_notified[addr] = time.time()
                     sent_for_approval.add(addr)
                     
-                    log.info(f"Sent GMGN wallet {addr[:8]}... for Telegram approval (WR: {winrate:.0f}%, Trades: {total_trades}, SOL: {sol_balance:.2f})")
+                    log.info(
+                        f"Sent GMGN wallet {addr[:8]}... for Telegram approval "
+                        f"(WR: {winrate:.0f}%, Trades: {total_trades}, SOL: {sol_balance:.2f}, AI Score: {detailed_stats.get('ai_score', 'N/A')})"
+                    )
             
             # Limit to 3 new wallet notifications per cycle to avoid spam
             if len(sent_for_approval) >= 3:

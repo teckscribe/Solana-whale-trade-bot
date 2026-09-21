@@ -171,7 +171,12 @@ If the primary private RPC continues to return `null` after multiple retries, `d
 - If $\Delta 	ext{Token} > 0$ and $\Delta 	ext{SOL} < 0$, the transaction is classified as a **BUY**.
 - Normalizes token amounts using on-chain decimals extracted directly from `tokenAmount.decimals`.
 
-### 3.4 Telemetry
+### 3.4 Signer Provenance Verification (Anti-Spoofing)
+Adapted from the FOMO Radar provenance principles, `decoder.py` inspects `message.account_keys` and transaction header permissions:
+- Confirms the target `whale_wallet` was an **authorized transaction signer** (`message.is_signer(whale_index)`).
+- Rejects unsolicited airdrops, third-party router injections, or multi-hop liquidity routings where the whale was merely a token recipient without signing authority.
+
+### 3.5 Telemetry
 Tracks `total_attempts`, `success`, `failed_after_retries`, and `fallback_success` in `_decode_stats`, queryable via `get_decode_stats()` for system monitoring.
 
 ---
@@ -179,7 +184,7 @@ Tracks `total_attempts`, `success`, `failed_after_retries`, and `fallback_succes
 ## Chapter 4: `trade_brain.py` — The Execution Core & TRAM Memory Engine
 
 ### 4.1 Purpose & Role
-`trade_brain.py` is the largest and most critical module (78 KB). It houses the **TRAM in-memory state engine**, performs risk pre-flight checks, derives execution sizing, launches autonomous position monitors, and settles books upon exit.
+`trade_brain.py` is the largest and most critical module (88 KB). It houses the **TRAM in-memory state engine**, performs risk pre-flight checks, derives execution sizing, launches autonomous position monitors, and settles books upon exit.
 
 ### 4.2 Core Data Structures: `TradingState` (TRAM)
 ```python
@@ -189,6 +194,8 @@ class TradingState:
     wallet_balance: float          # Available free cash (USD)
     initial_balance: float         # Starting portfolio baseline (USD)
     closed_trades: List[dict]      # Volatile FIFO queue of exited trades
+    token_buy_history: Dict[str, list]  # Rolling window for wave detection
+    seeded_blacklist: Set[str]     # Auto-quarantined seeder wave targets
     _lock: asyncio.Lock            # Concurrency barrier
 ```
 - **Zero Disk Latency**: Reading open exposure (`get_open_exposure_usd()`), allocating capital (`debit_balance()`), and updating prices happen entirely in memory.
@@ -196,10 +203,9 @@ class TradingState:
 
 ### 4.3 Trade Sizing & Fee Mathematics
 `trade_brain.py` computes position size dynamically:
-$$	ext{Trade Size} = \min\left(	ext{wallet\_balance} 	imes rac{	ext{ALLOCATION\_PCT}}{100}, 	ext{MAX\_EXPOSURE}
-ight)$$
+$$\text{Trade Size} = \min\left(\text{wallet\_balance} \times \frac{\text{ALLOCATION\_PCT}}{100}, \text{MAX\_EXPOSURE}\right)$$
 It calculates fixed round-trip network costs:
-$$	ext{Fixed Cost (SOL)} = 2 	imes (	ext{SOL\_BASE\_TX\_FEE} + 	ext{PRIORITY\_FEE\_SOL} + 	ext{TIP\_FEE\_SOL}) + 	ext{ATA\_RENT\_SOL}$$
+$$\text{Fixed Cost (SOL)} = 2 \times (\text{SOL\_BASE\_TX\_FEE} + \text{PRIORITY\_FEE\_SOL} + \text{TIP\_FEE\_SOL}) + \text{ATA\_RENT\_SOL}$$
 On a $25 paper wallet with 15% allocation ($3.75), fixed costs represent over 10% of the trade. The strategy requires `ALLOCATION_PCT` $\ge 40-50\%$ to keep fixed overhead below $2.5\%$.
 
 ### 4.4 Position Monitor Loop (`monitor_position`)
@@ -214,6 +220,12 @@ When a trade is executed, an independent asynchronous task (`monitor_position`) 
    - **Dead Volume**: 10 minutes of zero price movement.
    - **External Panic Sell**: Watches `panic.json` file.
 4. On exit trigger: Calls `close_trade()` (paper) or `execute_gmgn_sell_all()` (live).
+
+### 4.5 Anti-Seeder Wave Attack Defense
+Adapted from `fomo-robinhood-radar`'s `provenance.py`:
+- **Attack Vector**: Scam deployers script sequential micro-buys ($0.01–$0.15 SOL) across 2+ whitelisted whale addresses within 30 to 300 seconds to trigger copy-bot consensus.
+- **Detector (`detect_seeder_wave`)**: Tracks rolling buy sizes and inter-arrival times per token. If $\ge 2$ whitelisted wallets enter with small/uniform amounts ($\le 0.20$ SOL) or tight queue gaps ($\le 45$s), the token is classified as a programmatic seeder attack.
+- **Autonomous Quarantining**: Immediately rejects the trade and adds the mint to `data/seeded_blacklist.json`. Future trades on this mint are rejected with zero overhead.
 
 ---
 
@@ -323,12 +335,25 @@ Whales that stop trading or lose profitability are automatically pruned:
 - `get_active_whales(max_age_hours=24)` returns only wallets active within the specified time window, preventing the WebSocket scanner from overloading connections on inactive addresses.
 
 ### 10.3 Discovery Engines
-- **`discovery.py`**: Scrapes recent high-volume Raydium pools on Solana RPC to discover wallets achieving $>5	imes$ returns.
+- **`discovery.py`**: Scrapes recent high-volume Raydium pools on Solana RPC to discover wallets achieving $>5\times$ returns.
 - **`gmgn_discovery.py`**: Queries GMGN's Smart Money API. Filters out wallets matching banned tags:
   ```python
   BANNED_TAGS = {'arbitrager', 'top_dev', 'sniper', 'smart_degen', 'kol', 'pump_dump'}
   ```
   Wallets passing the filter are queued and sent via Telegram for user approval.
+
+### 10.4 AI Whale Scoring & Vetting Engine (`ai_whale_scorer.py`)
+Adapted from `fomo-robinhood-radar`'s `pipeline/score.py`:
+- **Architecture**: Dual-mode auditor that evaluates smart money performance using either LLMs (Google Gemini API via `gemini-2.5-flash`) or an offline deterministic heuristic gauntlet.
+- **Core Metrics Audited**: 7-day win rate, 7-day trade cadence, realized profit, hold patterns, and metadata tags.
+- **Red Flag Identification**:
+  - `toxic_dev`: Token deployers who pump and dump their own mints (hard cap $\le 20$ score, immediate `BLACKLIST`).
+  - `mev` / `bot`: High-frequency scalpers ($>200$ trades/7d or bot tags) causing toxic slippage (hard cap $\le 30$ score, immediate `BLACKLIST`).
+  - `one-hit`: Enormous headline PnL on $<5$ total trades (demoted to `WATCH`).
+- **Autonomous Whitelist Pruning**: `whale_manager.audit_whitelist(auto_prune=True)` evaluates all active whitelisted wallets and automatically demotes any wallet scoring $<45$ to `discovery_db.json` with `BLACKLIST` status.
+- **Offline Human-in-the-Loop CLI**:
+  - `python ai_whale_scorer.py --export pending.json`: Exports compact prompt payloads for pasting into web LLM chats (ChatGPT/Claude/Gemini Web) at $0 cost.
+  - `python ai_whale_scorer.py --import-file scored.json`: Applies manual or web LLM evaluation results directly back into the database.
 
 ---
 
