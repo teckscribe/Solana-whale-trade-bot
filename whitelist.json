@@ -24,18 +24,6 @@
       "smart_degen"
     ]
   },
-  "Awzkv3caFa7qDEK3GFQieR4WDgXcQmNmcigw7CihfYoc": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789980802.620168,
-    "status": "WHITELIST",
-    "alpha_score": 114.52,
-    "winrate_7d": 62.5,
-    "profit_7d": 16009.28,
-    "trades_7d": 124,
-    "tags": [
-      "smart_degen"
-    ]
-  },
   "23smoGAtYeEHjdbyXUSZFWkEjP8oDf92UwNnnXp1a91w": {
     "discovered_at": 1789707012.2777407,
     "last_active": 1789980782.7393904,
@@ -118,20 +106,6 @@
     "trades_7d": 88,
     "tags": [
       "smart_degen"
-    ]
-  },
-  "5Dib6bEKkg1C84aD8FbBoyk3k1zZSDtmkU2ypsCE9euY": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789980748.0365536,
-    "status": "WHITELIST",
-    "alpha_score": 76.24,
-    "winrate_7d": 55.0,
-    "profit_7d": 620.15,
-    "trades_7d": 79,
-    "tags": [
-      "smart_degen",
-      "gmgn_go",
-      "gmgn"
     ]
   },
   "BumkaFdBaQp4TBCbgtLzMfS7nJALjBfEyyXmGrWZAtzL": {
