@@ -1,7 +1,7 @@
 {
   "_comment": "Runtime settings for WTB. Managed by settings_manager.py.",
-  "_updated": "2026-09-21T15:20:00.000000+00:00",
-  "_paper_wallet_version": 4,
+  "_updated": "2026-09-25T20:54:19.862267+00:00",
+  "_paper_wallet_version": 5,
   "TRADE_MODE": "PAPER",
   "ALLOCATION_PCT": 25.0,
   "TAKE_PROFIT_PCT": 20.0,
@@ -25,7 +25,7 @@
   "GMGN_DISCOVERY_ENABLED": true,
   "DISCOVERY_INTERVAL_MINUTES": 10,
   "PAPER_BALANCE_USD": 100.0,
-  "PAPER_WALLET_BALANCE": 100.0,
+  "PAPER_WALLET_BALANCE": 130.491598,
   "POLL_INTERVAL": 2.0,
   "MAX_RESUME_AGE_HOURS": 2.0,
   "TRAILING_STOP_ENABLED": true,
