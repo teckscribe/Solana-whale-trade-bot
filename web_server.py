@@ -381,9 +381,19 @@ async def get_history(mode: str = "ALL", _: bool = Depends(require_auth)):
         "trades": filtered
     }
 
+# Institutional Safety Filters
+BANNED_WHALE_TAGS = {
+    "mev", "sniper", "banana", "padre", "trojan", "maestro",
+    "photon", "axiom", "bloom", "bullx", "arbitrager", "arbitrageur",
+    "frontrunner", "sandwich", "top_dev", "dev", "token_creator", "deployer"
+}
+MAX_SAFE_7D_TRADES = 200  # High-frequency sniper machine bot threshold
+MIN_SAFE_AI_SCORE = 50   # Minimum acceptable AI gauntlet score
+
 class WhitelistAction(BaseModel):
     wallet: str
     status: str = "WHITELIST"
+    force: bool = False
 
 
 @app.get("/api/whales")
@@ -454,8 +464,12 @@ async def get_whales(mode: str = "ALL", _: bool = Depends(require_auth)):
 @app.get("/api/whales/neutral")
 async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool = Depends(require_auth)):
     """
-    Evaluates and returns neutral whales scored by the AI Whale Scorer gauntlet,
-    highlighting high-conviction Alpha candidates with an option to whitelist.
+    Evaluates and returns neutral whales scored by the AI Whale Scorer gauntlet.
+    Enforces institutional safety filters:
+      - Rejects banned tags (arbitrageur, MEV, sandwich, sniper, bot platforms).
+      - Rejects high-frequency sniper bots (> 200 trades/7D).
+      - Rejects AI blacklist status and scores < 50.
+      - Default view ('all') ONLY displays verified clean alphas.
     """
     ranked_path = os.path.join(BASE_DIR, "data", "neutral_whales_ranked.json")
     ranked = []
@@ -469,7 +483,10 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool 
     disc_data = whale_manager.get_discovery_data()
     total_neutral = sum(1 for v in disc_data.values() if v.get("status", "NEUTRAL").upper() == "NEUTRAL")
     wl_set = whale_manager.get_whitelist_set()
-    candidates = []
+
+    all_processed = []
+    clean_candidates = []
+    quarantined_candidates = []
 
     for r in ranked:
         w = r.get("wallet", "")
@@ -481,7 +498,8 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool 
         wr = float(s7.get("winrate", 0.0))
         profit = float(s7.get("realized", 0.0))
         trades = int(s7.get("trades", 0))
-        tags = r.get("tags", [])
+        raw_tags = r.get("tags", [])
+        tags = [str(t).strip().lower() for t in raw_tags]
         native_bal = float(s7.get("native_balance", 0.0))
 
         data = {
@@ -494,21 +512,29 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool 
         score_res = ai_whale_scorer.score_wallet(w, data)
         is_wl = w in wl_set
 
-        # Filter option handling
-        if filter == "alpha" and (score_res.score < 70 or score_res.status == "BLACKLIST"):
-            continue
-        elif filter == "consistent" and (wr < 90.0 or trades < 5):
-            continue
-        elif filter == "high_pnl" and profit < 500.0:
-            continue
+        # Institutional Toxicity Checks
+        rejections = []
+        found_banned = [t for t in tags if t in BANNED_WHALE_TAGS]
+        if found_banned:
+            rejections.append(f"Banned Tag: {', '.join(found_banned)}")
+        if trades > MAX_SAFE_7D_TRADES:
+            rejections.append(f"Sniper frequency: {trades} trades/7d (limit {MAX_SAFE_7D_TRADES})")
+        if score_res.status == "BLACKLIST":
+            rejections.append(f"AI Blacklist ({', '.join(score_res.red_flags) or 'Toxic pattern'})")
+        elif score_res.score < MIN_SAFE_AI_SCORE:
+            rejections.append(f"Low AI score: {score_res.score} < {MIN_SAFE_AI_SCORE}")
 
-        candidates.append({
+        passed_all_filters = len(rejections) == 0
+
+        item = {
             "wallet": w,
             "ai_score": score_res.score,
             "ai_status": score_res.status,
             "style": score_res.style,
             "summary": score_res.summary,
             "red_flags": score_res.red_flags,
+            "rejections": rejections,
+            "passed_filters": passed_all_filters,
             "winrate_7d": wr,
             "profit_7d": profit,
             "trades_7d": trades,
@@ -519,9 +545,35 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool 
             "profit_30d": float(s30.get("realized", 0.0)),
             "trades_30d": int(s30.get("trades", 0) or 0),
             "native_balance": native_bal,
-            "tags": tags,
+            "tags": raw_tags,
             "is_whitelisted": is_wl,
-        })
+        }
+
+        if passed_all_filters:
+            clean_candidates.append(item)
+        else:
+            quarantined_candidates.append(item)
+        all_processed.append(item)
+
+    # Filter option handling:
+    # "all" (default): ONLY show clean candidates that PASSED ALL FILTERS
+    # "alpha": Clean candidates with score >= 70
+    # "consistent": Clean candidates with winrate >= 90% and trades >= 5
+    # "high_pnl": Clean candidates with profit >= $500
+    # "quarantine": Show rejected/blocked candidates for audit
+    # "raw": Show everything
+    if filter == "alpha":
+        candidates = [c for c in clean_candidates if c["ai_score"] >= 70]
+    elif filter == "consistent":
+        candidates = [c for c in clean_candidates if c["winrate_7d"] >= 90.0 and c["trades_7d"] >= 5]
+    elif filter == "high_pnl":
+        candidates = [c for c in clean_candidates if c["profit_7d"] >= 500.0]
+    elif filter in ["quarantine", "rejected"]:
+        candidates = quarantined_candidates
+    elif filter == "raw":
+        candidates = all_processed
+    else:  # "all" default -> Strict institutional vetting: clean only!
+        candidates = clean_candidates
 
     # Sort candidates
     if sort_by == "winrate":
@@ -535,8 +587,11 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool 
 
     return {
         "total_neutral_db": total_neutral,
-        "ranked_count": len(candidates),
+        "total_scanned": len(ranked),
+        "safe_count": len(clean_candidates),
+        "quarantined_count": len(quarantined_candidates),
         "active_whitelists": len(wl_set),
+        "filter_applied": filter,
         "candidates": candidates,
     }
 
@@ -550,6 +605,43 @@ async def update_whale_whitelist(action: WhitelistAction, _: bool = Depends(requ
 
     if len(wallet) < 32 or len(wallet) > 44:
         raise HTTPException(status_code=400, detail="Invalid Solana wallet address format")
+
+    # Safety Guardrail: If attempting to WHITELIST, verify against toxic tags and blacklists
+    if status == "WHITELIST" and not action.force:
+        ranked_path = os.path.join(BASE_DIR, "data", "neutral_whales_ranked.json")
+        if os.path.exists(ranked_path):
+            try:
+                with open(ranked_path, "r", encoding="utf-8") as f:
+                    ranked = json.load(f)
+                matched = next((r for r in ranked if r.get("wallet") == wallet), None)
+                if matched:
+                    tags = [str(t).lower() for t in matched.get("tags", [])]
+                    s7 = matched.get("7d", {})
+                    trades = int(s7.get("trades", 0))
+                    banned = [t for t in tags if t in BANNED_WHALE_TAGS]
+                    if banned:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. It contains banned toxic tags: {', '.join(banned)} (MEV/Sniper/Arbitrage). Whitelisting blocked."
+                        )
+                    if trades > MAX_SAFE_7D_TRADES:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. Trade frequency ({trades}/7D) exceeds safe limit of {MAX_SAFE_7D_TRADES} (Sniper Bot). Whitelisting blocked."
+                        )
+
+                # Check empirical bot copy-trading performance history
+                copy_perf = ai_whale_scorer._get_copy_performance(wallet)
+                if copy_perf and copy_perf.get("trades", 0) >= 3:
+                    if copy_perf.get("winrate", 0) < 25.0 or copy_perf.get("total_pnl", 0) < -2.0:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. Historical WTB copy trades yielded net losses (WR: {copy_perf['winrate']:.1f}%, PnL: ${copy_perf['total_pnl']:.2f}). Whitelisting blocked."
+                        )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logging.warning(f"Error checking safety for {wallet}: {e}")
 
     ok = whale_manager.set_whale_status(wallet, status)
     if not ok:

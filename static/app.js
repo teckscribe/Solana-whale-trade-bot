@@ -754,7 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchNeutralWhales() {
         const tbody = document.getElementById('neutral-whale-tbody');
         if (tbody && neutralWhales.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="table-loading">Evaluating neutral whales through AI Scorer...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="table-loading">Evaluating neutral whales through AI Scorer...</td></tr>';
         }
         try {
             const filterVal = neutralWhaleFilter ? neutralWhaleFilter.value : 'all';
@@ -764,17 +764,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             neutralWhales = data.candidates || [];
             if (subviewNeutralCount) {
-                subviewNeutralCount.textContent = data.ranked_count || neutralWhales.length;
+                subviewNeutralCount.textContent = data.safe_count !== undefined ? data.safe_count : neutralWhales.length;
             }
             if (subviewActiveCount && data.active_whitelists !== undefined) {
                 subviewActiveCount.textContent = data.active_whitelists;
+            }
+            const cleanBadge = document.getElementById('safety-clean-badge');
+            if (cleanBadge && data.safe_count !== undefined) {
+                cleanBadge.textContent = `${data.safe_count} Verified Alphas`;
+            }
+            const quarBadge = document.getElementById('safety-quarantine-badge');
+            if (quarBadge && data.quarantined_count !== undefined) {
+                quarBadge.textContent = `${data.quarantined_count} Blocked Toxic`;
             }
 
             filterAndRenderNeutralWhales();
         } catch (e) {
             console.error('Error fetching neutral whales:', e);
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Failed to load neutral whales. Please retry.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Failed to load neutral whales. Please retry.</td></tr>';
             }
         }
     }
@@ -796,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="table-empty">No neutral whales match the selected filter or search query.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" class="table-empty">No neutral whales match the selected filter or search query.</td></tr>`;
             return;
         }
 
@@ -812,17 +820,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const sell7d = w.sell_7d || 0;
             const pnl30d = parseFloat(w.profit_30d || 0);
             const bal = parseFloat(w.native_balance || 0);
-            const style = w.style || 'Micro-Cap Scalper';
+            const style = Array.isArray(w.style) ? w.style.join(', ') : (w.style || 'Swing / Scalper');
             const tags = Array.isArray(w.tags) ? w.tags : [];
             const isWl = !!w.is_whitelisted;
+            const passed = w.passed_filters !== false;
 
             const tagsHtml = tags.length > 0
                 ? tags.map(t => `<span class="pill-tag">${t}</span>`).join('')
                 : '<span style="color:var(--text-muted); font-size:0.75rem;">--</span>';
 
+            const safetyHtml = passed
+                ? '<span class="pill-tag" style="background:rgba(16,185,129,0.12); color:var(--emerald-profit); border:1px solid rgba(16,185,129,0.28); font-weight:600;">✓ Safe Alpha</span>'
+                : `<span class="badge-pnl negative" style="font-size:0.68rem; line-height:1.2; padding:3px 6px; display:inline-block;" title="${(w.rejections || []).join('; ')}">⚠️ Blocked: ${(w.rejections && w.rejections[0]) || 'Toxic'}</span>`;
+
             const actionHtml = isWl
                 ? '<span class="badge-whitelisted">⭐ In Whitelist</span>'
-                : `<button class="btn btn-primary btn-add-whale" onclick="window.addWhaleToWhitelist('${wallet}', this)">➕ Add</button>`;
+                : (passed
+                    ? `<button class="btn btn-primary btn-add-whale" onclick="window.addWhaleToWhitelist('${wallet}', this, false)">➕ Add</button>`
+                    : `<button class="btn btn-secondary btn-add-whale" style="background:var(--rose-loss); color:#fff; border:none;" onclick="window.addWhaleToWhitelist('${wallet}', this, true)">⚠️ Override</button>`);
 
             html += `
                 <tr>
@@ -843,6 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="badge-ai-score ${scoreClass}">★ ${score}</div>
                         <div><span class="pill-style">${style}</span></div>
                     </td>
+                    <td>${safetyHtml}</td>
                     <td><span class="badge-pnl ${wr >= 60 ? 'positive' : 'negative'}">${wr.toFixed(1)}%</span></td>
                     <td><span class="badge-pnl ${pnl7d >= 0 ? 'positive' : 'negative'}">${pnl7d >= 0 ? '+' : ''}${formatUSD(pnl7d)}</span></td>
                     <td>
@@ -862,8 +878,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Global Whitelist Add handler
-    window.addWhaleToWhitelist = async function(wallet, btn) {
+    window.addWhaleToWhitelist = async function(wallet, btn, force = false) {
         if (!wallet) return;
+        if (force) {
+            const ok = confirm(`Safety Guardrail Warning: Wallet ${wallet.slice(0,6)}... was flagged by anti-toxicity filters.\n\nAre you sure you want to FORCE whitelist this wallet?`);
+            if (!ok) return;
+        }
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'Adding...';
@@ -872,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await apiFetch('/api/whales/whitelist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ wallet: wallet, status: 'WHITELIST' })
+                body: JSON.stringify({ wallet: wallet, status: 'WHITELIST', force: force })
             });
             const data = await res.json();
             if (data.success) {
@@ -899,15 +919,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast(data.detail || 'Failed to add whale to whitelist', 'error');
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = '➕ Add';
+                    btn.textContent = force ? '⚠️ Override' : '➕ Add';
                 }
             }
         } catch (e) {
             console.error('Error adding whale to whitelist:', e);
-            showToast('Error adding whale: ' + (e.message || 'Request failed'), 'error');
+            showToast('Security Alert: ' + (e.message || 'Request failed'), 'error');
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = '➕ Add';
+                btn.textContent = force ? '⚠️ Override' : '➕ Add';
             }
         }
     };

@@ -403,7 +403,7 @@
                 <div class="card-header flex-wrap">
                     <div class="card-title-group">
                         <h2 class="card-title">Neutral Whale Intelligence & AI Scorer</h2>
-                        <span class="card-caption">Scored with 100-pt AI Gauntlet from on-chain performance. Click "➕ Add" to whitelist any whale instantly.</span>
+                        <span class="card-caption">Pre-filtered through institutional anti-toxicity gauntlet (banned tags, sniper machine caps, AI score ≥ 50).</span>
                     </div>
                     <div class="table-controls">
                         <div class="search-box">
@@ -413,10 +413,11 @@
                         <div class="select-group">
                             <label for="neutral-whale-filter" class="filter-label">Filter:</label>
                             <select id="neutral-whale-filter" class="select-input">
-                                <option value="all">All Candidates</option>
-                                <option value="alpha">High Conviction (AI ≥ 70)</option>
-                                <option value="consistent">Consistent (WR ≥ 90%)</option>
-                                <option value="high_pnl">High Profit (+$500+)</option>
+                                <option value="all">🛡️ Safe Alphas (Passed All Filters)</option>
+                                <option value="alpha">⭐ High Conviction (AI Score ≥ 70)</option>
+                                <option value="consistent">💎 Ultra Consistent (WR ≥ 90%)</option>
+                                <option value="high_pnl">💰 High Profit (+$500+)</option>
+                                <option value="quarantine">⚠️ Quarantined / Blocked (29 Toxic)</option>
                             </select>
                         </div>
                         <div class="select-group">
@@ -434,12 +435,30 @@
                     </div>
                 </div>
 
+                <!-- Safety Filter KPI Banner -->
+                <div class="safety-banner" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.22); border-radius: var(--radius-sm); margin: 0 20px 16px 20px; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.3rem;">🛡️</span>
+                        <div>
+                            <div style="color: var(--emerald-profit); font-weight: 700; font-size: 0.85rem;">Institutional Anti-Toxicity Filtration Active</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+                                Enforcing 4 hard filters: Banned Tags (arbitrager/mev/sniper/axiom), Trade Frequency (≤ 200/wk), AI Gauntlet (Score ≥ 50), and Negative Copy History.
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="safety-clean-badge" class="count-pill" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-profit); border: 1px solid rgba(16, 185, 129, 0.3);">57 Verified Alphas</span>
+                        <span id="safety-quarantine-badge" class="count-pill" style="background: rgba(244, 63, 94, 0.12); color: var(--rose-loss); border: 1px solid rgba(244, 63, 94, 0.25);">29 Blocked Toxic</span>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="terminal-table">
                         <thead>
                             <tr>
                                 <th>Wallet Address</th>
                                 <th>AI Score & Style</th>
+                                <th>Safety Status</th>
                                 <th>7D Win Rate</th>
                                 <th>7D Realized PnL</th>
                                 <th>7D Activity</th>
@@ -450,7 +469,7 @@
                         </thead>
                         <tbody id="neutral-whale-tbody">
                             <tr>
-                                <td colspan="8" class="table-loading">Loading neutral whale candidates...</td>
+                                <td colspan="9" class="table-loading">Loading neutral whale candidates...</td>
                             </tr>
                         </tbody>
                     </table>
