@@ -654,6 +654,175 @@ async def update_whale_whitelist(action: WhitelistAction, _: bool = Depends(requ
         "active_whitelists": len(whale_manager.get_whitelist())
     }
 
+
+# ─── On-Demand Alpha Whale Scanner ───────────────────────────────────────────
+
+class ScanRequest(BaseModel):
+    limit: int = 15
+    status_target: str = "NEUTRAL"
+    recent_days: float = 14.0
+
+
+class WhaleScannerState:
+    is_scanning: bool = False
+    progress: str = "Idle"
+    current: int = 0
+    total: int = 0
+    discovered_count: int = 0
+    last_scan_time: float = 0.0
+    error: str = ""
+
+
+scanner_state = WhaleScannerState()
+
+
+async def run_whale_scan_task(limit: int = 15, status_target: str = "NEUTRAL", recent_days: float = 14.0):
+    global scanner_state
+    scanner_state.is_scanning = True
+    scanner_state.progress = "Searching candidate smart-money wallets..."
+    scanner_state.current = 0
+    scanner_state.discovered_count = 0
+    scanner_state.error = ""
+
+    try:
+        import whale_scanner_core
+        import gmgn_discovery
+
+        candidate_wallets = []
+        # 1. Try pulling fresh live smartmoney from GMGN CLI
+        try:
+            live_wallets = await gmgn_discovery.fetch_top_wallets(limit=limit)
+            for w in live_wallets:
+                addr = w.get("address")
+                if addr and addr not in candidate_wallets:
+                    candidate_wallets.append(addr)
+        except Exception as e:
+            logging.warning(f"GMGN live discovery fetch skipped: {e}")
+
+        # 2. Backfill from local discovery DB if needed
+        if len(candidate_wallets) < limit:
+            needed = limit - len(candidate_wallets)
+            neutrals = whale_scanner_core.get_candidates(
+                status_target=status_target,
+                recent_days=recent_days,
+                limit=needed * 2
+            )
+            for w, _ in neutrals:
+                if w not in candidate_wallets:
+                    candidate_wallets.append(w)
+                if len(candidate_wallets) >= limit:
+                    break
+
+        scanner_state.total = len(candidate_wallets)
+        if not candidate_wallets:
+            scanner_state.progress = "No candidates found to evaluate."
+            scanner_state.is_scanning = False
+            return
+
+        ranked_path = os.path.join(BASE_DIR, "data", "neutral_whales_ranked.json")
+        existing_ranked = []
+        if os.path.exists(ranked_path):
+            try:
+                with open(ranked_path, "r", encoding="utf-8") as f:
+                    existing_ranked = json.load(f)
+            except Exception:
+                existing_ranked = []
+
+        existing_map = {r.get("wallet"): r for r in existing_ranked if r.get("wallet")}
+        new_alphas_count = 0
+
+        for idx, wallet in enumerate(candidate_wallets, 1):
+            scanner_state.current = idx
+            scanner_state.progress = f"Evaluating {idx}/{len(candidate_wallets)}: {wallet[:6]}..."
+
+            profile = await asyncio.to_thread(
+                whale_scanner_core.fetch_wallet_profile,
+                wallet,
+                use_cache=True,
+                deep_scan=True,
+                rate_sleep=0.3
+            )
+
+            if not profile or not profile.get("7d"):
+                continue
+
+            s7 = profile.get("7d", {})
+            wr = float(s7.get("winrate", 0.0))
+            trades = int(s7.get("trades", 0))
+            realized = float(s7.get("realized", 0.0))
+            tags = [str(t).lower() for t in profile.get("tags", [])]
+
+            # Filter check
+            has_banned = any(b in tags for b in BANNED_WHALE_TAGS)
+            is_sniper = trades > MAX_SAFE_7D_TRADES
+
+            if not has_banned and not is_sniper and trades >= 3 and (wr >= 45.0 or realized > 0):
+                new_alphas_count += 1
+                scanner_state.discovered_count = new_alphas_count
+
+            # Update existing map with fresh profile
+            existing_map[wallet] = profile
+
+        # Save back merged ranked dataset
+        updated_list = list(existing_map.values())
+        updated_list.sort(key=lambda x: float(x.get("7d", {}).get("realized", 0.0)), reverse=True)
+
+        os.makedirs(os.path.dirname(ranked_path), exist_ok=True)
+        temp_path = f"{ranked_path}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(updated_list, f, indent=2)
+        os.replace(temp_path, ranked_path)
+
+        scanner_state.last_scan_time = time.time()
+        scanner_state.progress = f"Scan complete! Evaluated {len(candidate_wallets)} wallets. Discovered {new_alphas_count} qualified alphas."
+        logging.info(f"Alpha Whale Scan completed. Evaluated {len(candidate_wallets)} candidates, {new_alphas_count} qualified alphas.")
+
+    except Exception as e:
+        logging.error(f"Error during whale scan task: {e}")
+        scanner_state.error = str(e)
+        scanner_state.progress = f"Scan failed: {e}"
+    finally:
+        scanner_state.is_scanning = False
+
+
+@app.post("/api/whales/scan")
+async def start_whale_scan(req: ScanRequest = None, _: bool = Depends(require_auth)):
+    global scanner_state
+    if scanner_state.is_scanning:
+        return {
+            "status": "already_running",
+            "message": scanner_state.progress,
+            "progress": scanner_state.progress,
+            "current": scanner_state.current,
+            "total": scanner_state.total
+        }
+
+    limit = req.limit if req and req.limit else 15
+    status_target = req.status_target if req and req.status_target else "NEUTRAL"
+    recent_days = req.recent_days if req and req.recent_days else 14.0
+
+    asyncio.create_task(run_whale_scan_task(limit=limit, status_target=status_target, recent_days=recent_days))
+
+    return {
+        "status": "started",
+        "message": f"Whale discovery scan initiated for up to {limit} candidates in background."
+    }
+
+
+@app.get("/api/whales/scan/status")
+async def get_whale_scan_status(_: bool = Depends(require_auth)):
+    global scanner_state
+    return {
+        "is_scanning": scanner_state.is_scanning,
+        "progress": scanner_state.progress,
+        "current": scanner_state.current,
+        "total": scanner_state.total,
+        "discovered_count": scanner_state.discovered_count,
+        "last_scan_time": scanner_state.last_scan_time,
+        "error": scanner_state.error
+    }
+
+
 @app.get("/api/logs")
 async def get_logs(_: bool = Depends(require_auth)):
     env_content = []

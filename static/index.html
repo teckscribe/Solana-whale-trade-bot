@@ -293,7 +293,10 @@
                     <h1 class="pane-title">Whale Analyze & Whitelist</h1>
                     <p class="pane-subtitle">Live on-chain intelligence on the top-performing Solana smart money wallets.</p>
                 </div>
-                <div class="pane-actions">
+                <div class="pane-actions" style="display: flex; gap: 8px;">
+                    <button id="scan-whales-btn" class="btn btn-primary" title="Trigger On-Chain Alpha Whale Discovery Scan">
+                        <span class="btn-icon">⚡</span> Scan Whitelist Candidates
+                    </button>
                     <button id="refresh-whales-btn" class="btn btn-secondary">
                         <span class="btn-icon">🔄</span> Refresh Whales
                     </button>
@@ -429,6 +432,9 @@
                                 <option value="trades">7D Trade Count</option>
                             </select>
                         </div>
+                        <button id="btn-scan-neutral" class="btn btn-primary" title="Trigger On-Chain Alpha Whale Discovery Scan" style="padding: 6px 12px; font-size: 0.78rem;">
+                            <span>⚡ Scan Whitelist</span>
+                        </button>
                         <button id="btn-refresh-neutral" class="btn btn-secondary" title="Refresh Neutral Candidates" style="padding: 6px 10px;">
                             <span>🔄</span>
                         </button>

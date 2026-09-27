@@ -948,6 +948,83 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ── On-Demand Whale Discovery Scanning ─────────────────────────────────
+    const scanWhalesBtn = document.getElementById('scan-whales-btn');
+    const btnScanNeutral = document.getElementById('btn-scan-neutral');
+    let scanPollTimer = null;
+
+    async function initiateWhaleScan() {
+        const scanBtns = [
+            document.getElementById('scan-whales-btn'),
+            document.getElementById('btn-scan-neutral')
+        ].filter(Boolean);
+
+        scanBtns.forEach(btn => {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-sm"></span> Scanning...';
+        });
+
+        showToast('Initiating on-chain GMGN alpha whale discovery...', 'info');
+
+        try {
+            const res = await apiFetch('/api/whales/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit: 15, status_target: 'NEUTRAL' })
+            });
+            const data = await res.json();
+            if (data.status === 'already_running') {
+                showToast('Scan already in progress: ' + (data.message || 'Scanning...'), 'warning');
+            }
+
+            if (scanPollTimer) clearInterval(scanPollTimer);
+            scanPollTimer = setInterval(async () => {
+                try {
+                    const stRes = await apiFetch('/api/whales/scan/status');
+                    const stData = await stRes.json();
+                    if (stData.is_scanning) {
+                        const progressText = stData.total > 0
+                            ? `Evaluating ${stData.current}/${stData.total}...`
+                            : 'Scanning on-chain...';
+                        scanBtns.forEach(btn => {
+                            btn.innerHTML = `<span class="spinner-sm"></span> ${progressText}`;
+                        });
+                    } else {
+                        clearInterval(scanPollTimer);
+                        scanPollTimer = null;
+                        scanBtns.forEach(btn => {
+                            btn.disabled = false;
+                            btn.innerHTML = btn.id === 'scan-whales-btn'
+                                ? '<span class="btn-icon">⚡</span> Scan Whitelist Candidates'
+                                : '<span>⚡ Scan Whitelist</span>';
+                        });
+
+                        showToast(stData.progress || 'Whale discovery scan completed!', 'success');
+                        
+                        setWhaleSubview('neutral');
+                        fetchNeutralWhales();
+                        fetchWhales();
+                    }
+                } catch (pollErr) {
+                    console.error('Error polling scan status:', pollErr);
+                }
+            }, 1500);
+
+        } catch (e) {
+            console.error('Error initiating whale scan:', e);
+            showToast('Scan error: ' + (e.message || 'Failed to start scan'), 'error');
+            scanBtns.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = btn.id === 'scan-whales-btn'
+                    ? '<span class="btn-icon">⚡</span> Scan Whitelist Candidates'
+                    : '<span>⚡ Scan Whitelist</span>';
+            });
+        }
+    }
+
+    if (scanWhalesBtn) scanWhalesBtn.addEventListener('click', initiateWhaleScan);
+    if (btnScanNeutral) btnScanNeutral.addEventListener('click', initiateWhaleScan);
+
     // ── 9. Tab 4: Settings & Diagnostics ───────────────────────────────────
     let currentSettings = {};
     let settingsSpec = [];
