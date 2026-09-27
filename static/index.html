@@ -347,12 +347,26 @@
                 </div>
             </div>
 
-            <!-- Whale Roster Table Card -->
-            <div class="content-card">
+            <!-- Subview Selection: Active Roster vs Neutral Discovery -->
+            <div class="subview-nav-wrapper">
+                <div class="subview-nav">
+                    <button id="subview-active-btn" class="subview-btn active" type="button">
+                        <span class="subview-icon">📋</span> Active Whitelist Roster
+                        <span class="subview-badge" id="subview-active-count">0</span>
+                    </button>
+                    <button id="subview-neutral-btn" class="subview-btn" type="button">
+                        <span class="subview-icon">🔬</span> Neutral Whale Discovery & Ranking
+                        <span class="subview-badge badge-glow" id="subview-neutral-count">86</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SUBVIEW 1: Active Whitelist Roster -->
+            <div id="subview-active-panel" class="content-card subview-panel">
                 <div class="card-header flex-wrap">
                     <div class="card-title-group">
                         <h2 class="card-title">Tracked Whale Roster</h2>
-                        <span class="card-caption">Smart money wallets ranked by copy-trading profitability</span>
+                        <span class="card-caption">Smart money wallets actively monitored for live copy-trades</span>
                     </div>
                     <div class="table-controls">
                         <div class="search-box">
@@ -378,6 +392,65 @@
                         <tbody id="whale-tbody">
                             <tr>
                                 <td colspan="7" class="table-loading">Loading whale intelligence database...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SUBVIEW 2: Neutral Whale Discovery & Scorer -->
+            <div id="subview-neutral-panel" class="content-card subview-panel" style="display: none;">
+                <div class="card-header flex-wrap">
+                    <div class="card-title-group">
+                        <h2 class="card-title">Neutral Whale Intelligence & AI Scorer</h2>
+                        <span class="card-caption">Scored with 100-pt AI Gauntlet from on-chain performance. Click "➕ Add" to whitelist any whale instantly.</span>
+                    </div>
+                    <div class="table-controls">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="neutral-whale-search" placeholder="Search wallet address or tag..." aria-label="Search neutral whales">
+                        </div>
+                        <div class="select-group">
+                            <label for="neutral-whale-filter" class="filter-label">Filter:</label>
+                            <select id="neutral-whale-filter" class="select-input">
+                                <option value="all">All Candidates</option>
+                                <option value="alpha">High Conviction (AI ≥ 70)</option>
+                                <option value="consistent">Consistent (WR ≥ 90%)</option>
+                                <option value="high_pnl">High Profit (+$500+)</option>
+                            </select>
+                        </div>
+                        <div class="select-group">
+                            <label for="neutral-whale-sort" class="filter-label">Sort By:</label>
+                            <select id="neutral-whale-sort" class="select-input">
+                                <option value="pnl">7D Realized PnL ($)</option>
+                                <option value="score">AI Whale Score</option>
+                                <option value="winrate">7D Win Rate (%)</option>
+                                <option value="trades">7D Trade Count</option>
+                            </select>
+                        </div>
+                        <button id="btn-refresh-neutral" class="btn btn-secondary" title="Refresh Neutral Candidates" style="padding: 6px 10px;">
+                            <span>🔄</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="terminal-table">
+                        <thead>
+                            <tr>
+                                <th>Wallet Address</th>
+                                <th>AI Score & Style</th>
+                                <th>7D Win Rate</th>
+                                <th>7D Realized PnL</th>
+                                <th>7D Activity</th>
+                                <th>30D PnL / Bal</th>
+                                <th>Tags & Traits</th>
+                                <th>Whitelist Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="neutral-whale-tbody">
+                            <tr>
+                                <td colspan="8" class="table-loading">Loading neutral whale candidates...</td>
                             </tr>
                         </tbody>
                     </table>

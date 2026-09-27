@@ -87,7 +87,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Immediate fetch for newly activated tab
         if (targetId === 'live') fetchDashboard();
         else if (targetId === 'history') fetchHistory();
-        else if (targetId === 'whales') fetchWhales();
+        else if (targetId === 'whales') {
+            fetchWhales();
+            if (typeof activeWhaleSubview !== 'undefined' && activeWhaleSubview === 'neutral') {
+                fetchNeutralWhales();
+            }
+        }
         else if (targetId === 'settings') {
             fetchSettings();
             fetchTelemetry();
@@ -618,9 +623,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ── 8. Tab 3: Whale Analyze ────────────────────────────────────────────
+    // ── 8. Tab 3: Whale Analyze & Whitelist ────────────────────────────────
     let allWhales = [];
+    let neutralWhales = [];
+    let activeWhaleSubview = 'active';
+
     const whaleSearch = document.getElementById('whale-search');
+    const subviewActiveBtn = document.getElementById('subview-active-btn');
+    const subviewNeutralBtn = document.getElementById('subview-neutral-btn');
+    const subviewActivePanel = document.getElementById('subview-active-panel');
+    const subviewNeutralPanel = document.getElementById('subview-neutral-panel');
+    const subviewActiveCount = document.getElementById('subview-active-count');
+    const subviewNeutralCount = document.getElementById('subview-neutral-count');
+
+    const neutralWhaleSearch = document.getElementById('neutral-whale-search');
+    const neutralWhaleFilter = document.getElementById('neutral-whale-filter');
+    const neutralWhaleSort = document.getElementById('neutral-whale-sort');
+    const btnRefreshNeutral = document.getElementById('btn-refresh-neutral');
+
+    function setWhaleSubview(view) {
+        activeWhaleSubview = view;
+        if (view === 'active') {
+            if (subviewActiveBtn) subviewActiveBtn.classList.add('active');
+            if (subviewNeutralBtn) subviewNeutralBtn.classList.remove('active');
+            if (subviewActivePanel) subviewActivePanel.style.display = 'block';
+            if (subviewNeutralPanel) subviewNeutralPanel.style.display = 'none';
+        } else {
+            if (subviewActiveBtn) subviewActiveBtn.classList.remove('active');
+            if (subviewNeutralBtn) subviewNeutralBtn.classList.add('active');
+            if (subviewActivePanel) subviewActivePanel.style.display = 'none';
+            if (subviewNeutralPanel) subviewNeutralPanel.style.display = 'block';
+            if (neutralWhales.length === 0) {
+                fetchNeutralWhales();
+            }
+        }
+    }
+
+    if (subviewActiveBtn) subviewActiveBtn.addEventListener('click', () => setWhaleSubview('active'));
+    if (subviewNeutralBtn) subviewNeutralBtn.addEventListener('click', () => setWhaleSubview('neutral'));
 
     async function fetchWhales() {
         try {
@@ -632,6 +672,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const wlEl = document.getElementById('whale-whitelists');
             if (wlEl) wlEl.textContent = data.active_whitelists || 0;
+
+            if (subviewActiveCount) {
+                subviewActiveCount.textContent = data.active_whitelists || (data.whales ? data.whales.length : 0);
+            }
 
             allWhales = data.whales || [];
 
@@ -675,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const wr = parseFloat(w.win_rate || 0);
             const total = w.total || 0;
             const profit = parseFloat(w.profit || 0);
-            const modes = w.modes || 'PAPER';
+            const modes = w.modes || 'STANDBY';
             const isProfit = profit >= 0;
             const sign = isProfit ? '+' : '';
 
@@ -707,10 +751,182 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = html;
     }
 
+    async function fetchNeutralWhales() {
+        const tbody = document.getElementById('neutral-whale-tbody');
+        if (tbody && neutralWhales.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="table-loading">Evaluating neutral whales through AI Scorer...</td></tr>';
+        }
+        try {
+            const filterVal = neutralWhaleFilter ? neutralWhaleFilter.value : 'all';
+            const sortVal = neutralWhaleSort ? neutralWhaleSort.value : 'pnl';
+            const res = await apiFetch(`/api/whales/neutral?filter=${encodeURIComponent(filterVal)}&sort_by=${encodeURIComponent(sortVal)}`);
+            const data = await res.json();
+
+            neutralWhales = data.candidates || [];
+            if (subviewNeutralCount) {
+                subviewNeutralCount.textContent = data.ranked_count || neutralWhales.length;
+            }
+            if (subviewActiveCount && data.active_whitelists !== undefined) {
+                subviewActiveCount.textContent = data.active_whitelists;
+            }
+
+            filterAndRenderNeutralWhales();
+        } catch (e) {
+            console.error('Error fetching neutral whales:', e);
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Failed to load neutral whales. Please retry.</td></tr>';
+            }
+        }
+    }
+
+    function filterAndRenderNeutralWhales() {
+        const tbody = document.getElementById('neutral-whale-tbody');
+        if (!tbody) return;
+
+        const query = (neutralWhaleSearch ? neutralWhaleSearch.value : '').trim().toLowerCase();
+
+        let filtered = neutralWhales;
+        if (query) {
+            filtered = filtered.filter(w => {
+                const wallet = (w.wallet || '').toLowerCase();
+                const tags = Array.isArray(w.tags) ? w.tags.join(' ').toLowerCase() : '';
+                const style = (w.style || '').toLowerCase();
+                return wallet.includes(query) || tags.includes(query) || style.includes(query);
+            });
+        }
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="table-empty">No neutral whales match the selected filter or search query.</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(w => {
+            const wallet = w.wallet || '';
+            const score = w.ai_score || 0;
+            const scoreClass = score >= 80 ? 'score-high' : (score >= 65 ? 'score-mid' : 'score-low');
+            const wr = parseFloat(w.winrate_7d || 0);
+            const pnl7d = parseFloat(w.profit_7d || 0);
+            const trades7d = w.trades_7d || 0;
+            const buy7d = w.buy_7d || 0;
+            const sell7d = w.sell_7d || 0;
+            const pnl30d = parseFloat(w.profit_30d || 0);
+            const bal = parseFloat(w.native_balance || 0);
+            const style = w.style || 'Micro-Cap Scalper';
+            const tags = Array.isArray(w.tags) ? w.tags : [];
+            const isWl = !!w.is_whitelisted;
+
+            const tagsHtml = tags.length > 0
+                ? tags.map(t => `<span class="pill-tag">${t}</span>`).join('')
+                : '<span style="color:var(--text-muted); font-size:0.75rem;">--</span>';
+
+            const actionHtml = isWl
+                ? '<span class="badge-whitelisted">⭐ In Whitelist</span>'
+                : `<button class="btn btn-primary btn-add-whale" onclick="window.addWhaleToWhitelist('${wallet}', this)">➕ Add</button>`;
+
+            html += `
+                <tr>
+                    <td>
+                        <span class="copy-address" onclick="copyAddress('${wallet}')" title="Copy wallet address">
+                            ${formatShortAddr(wallet)} <span class="copy-btn-mini">📋</span>
+                        </span>
+                        <div style="display: flex; gap: 4px; margin-top: 4px;">
+                            <a href="https://solscan.io/account/${wallet}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
+                                Solscan ↗
+                            </a>
+                            <a href="https://gmgn.ai/sol/address/${wallet}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
+                                GMGN ↗
+                            </a>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="badge-ai-score ${scoreClass}">★ ${score}</div>
+                        <div><span class="pill-style">${style}</span></div>
+                    </td>
+                    <td><span class="badge-pnl ${wr >= 60 ? 'positive' : 'negative'}">${wr.toFixed(1)}%</span></td>
+                    <td><span class="badge-pnl ${pnl7d >= 0 ? 'positive' : 'negative'}">${pnl7d >= 0 ? '+' : ''}${formatUSD(pnl7d)}</span></td>
+                    <td>
+                        <div class="mono-font">${trades7d} trades</div>
+                        <div style="font-size: 0.72rem; color: var(--text-muted);">${buy7d}B / ${sell7d}S</div>
+                    </td>
+                    <td>
+                        <div class="mono-font ${pnl30d >= 0 ? 'text-emerald' : 'text-rose'}">${pnl30d >= 0 ? '+' : ''}${formatUSD(pnl30d)}</div>
+                        <div style="font-size: 0.72rem; color: var(--text-muted);">${bal.toFixed(2)} SOL</div>
+                    </td>
+                    <td style="max-width: 180px;">${tagsHtml}</td>
+                    <td>${actionHtml}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    // Global Whitelist Add handler
+    window.addWhaleToWhitelist = async function(wallet, btn) {
+        if (!wallet) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+        }
+        try {
+            const res = await apiFetch('/api/whales/whitelist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wallet: wallet, status: 'WHITELIST' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`Wallet ${formatShortAddr(wallet)} added to Whitelist!`, 'success');
+                if (btn && btn.parentElement) {
+                    btn.parentElement.innerHTML = '<span class="badge-whitelisted">✓ Added</span>';
+                }
+                // Mark in neutralWhales cache
+                const target = neutralWhales.find(x => x.wallet === wallet);
+                if (target) target.is_whitelisted = true;
+
+                // Update active whitelist counter KPI & badge
+                const wlEl = document.getElementById('whale-whitelists');
+                if (wlEl && data.active_whitelists !== undefined) {
+                    wlEl.textContent = data.active_whitelists;
+                }
+                if (subviewActiveCount && data.active_whitelists !== undefined) {
+                    subviewActiveCount.textContent = data.active_whitelists;
+                }
+
+                // Refresh active whales in background
+                fetchWhales();
+            } else {
+                showToast(data.detail || 'Failed to add whale to whitelist', 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '➕ Add';
+                }
+            }
+        } catch (e) {
+            console.error('Error adding whale to whitelist:', e);
+            showToast('Error adding whale: ' + (e.message || 'Request failed'), 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '➕ Add';
+            }
+        }
+    };
+
     if (whaleSearch) whaleSearch.addEventListener('input', filterAndRenderWhales);
+    if (neutralWhaleSearch) neutralWhaleSearch.addEventListener('input', filterAndRenderNeutralWhales);
+    if (neutralWhaleFilter) neutralWhaleFilter.addEventListener('change', fetchNeutralWhales);
+    if (neutralWhaleSort) neutralWhaleSort.addEventListener('change', fetchNeutralWhales);
+    if (btnRefreshNeutral) btnRefreshNeutral.addEventListener('click', fetchNeutralWhales);
 
     const refreshWhalesBtn = document.getElementById('refresh-whales-btn');
-    if (refreshWhalesBtn) refreshWhalesBtn.addEventListener('click', fetchWhales);
+    if (refreshWhalesBtn) {
+        refreshWhalesBtn.addEventListener('click', () => {
+            fetchWhales();
+            if (activeWhaleSubview === 'neutral') {
+                fetchNeutralWhales();
+            }
+        });
+    }
 
     // ── 9. Tab 4: Settings & Diagnostics ───────────────────────────────────
     let currentSettings = {};

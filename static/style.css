@@ -1562,3 +1562,162 @@ select.setting-input {
 @media (max-width: 480px) {
     .kpi-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Subview Navigation (Whale Tabs) ────────────────────────────────── */
+.subview-nav-wrapper {
+    margin-bottom: 20px;
+}
+
+.subview-nav {
+    display: inline-flex;
+    background: var(--bg-surface-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    gap: 4px;
+}
+
+.subview-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.subview-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.subview-btn.active {
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.subview-icon {
+    font-size: 1rem;
+}
+
+.subview-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 7px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 9999px;
+    background: var(--bg-surface-subtle);
+    color: var(--text-muted);
+}
+
+.subview-btn.active .subview-badge {
+    background: var(--brand-subtle);
+    color: var(--brand-primary);
+}
+
+.badge-glow {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--emerald-profit) !important;
+}
+
+/* ── Neutral Whale Analysis Badges & Controls ────────────────────────── */
+.badge-ai-score {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-family: 'Space Mono', monospace;
+}
+
+.badge-ai-score.score-high {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--emerald-profit);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.badge-ai-score.score-mid {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--blue-info);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.badge-ai-score.score-low {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--amber-warning);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.pill-style {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface-subtle);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+    margin-top: 3px;
+}
+
+.pill-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-surface-subtle);
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+    margin: 1px 2px;
+}
+
+.btn-add-whale {
+    padding: 5px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    background: var(--brand-primary);
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-add-whale:hover:not(:disabled) {
+    background: var(--brand-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-add-whale:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.badge-whitelisted {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--emerald-profit);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    white-space: nowrap;
+}
+

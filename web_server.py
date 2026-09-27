@@ -32,9 +32,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from typing import Dict, Any, Optional
 
+from pydantic import BaseModel
 from datetime import datetime, timezone
 from jupiter_api import get_sol_price_usd
 import settings_manager
+import whale_manager
+import ai_whale_scorer
 
 load_dotenv()
 
@@ -378,24 +381,22 @@ async def get_history(mode: str = "ALL", _: bool = Depends(require_auth)):
         "trades": filtered
     }
 
+class WhitelistAction(BaseModel):
+    wallet: str
+    status: str = "WHITELIST"
+
+
 @app.get("/api/whales")
 async def get_whales(mode: str = "ALL", _: bool = Depends(require_auth)):
     whale_db = {}
-    if os.path.exists("whitelist.json"):
-        try:
-            with open("whitelist.json", "r") as f:
-                wl = json.load(f)
-                for k, v in wl.items():
-                    v["status"] = "WHITELIST"
-                    whale_db[k] = v
-        except Exception: pass
-    if os.path.exists("discovery_db.json"):
-        try:
-            with open("discovery_db.json", "r") as f:
-                disc = json.load(f)
-                for k, v in disc.items():
-                    whale_db[k] = v
-        except Exception: pass
+    wl_set = whale_manager.get_whitelist_set()
+    for w in wl_set:
+        whale_db[w] = {"status": "WHITELIST"}
+        
+    disc_data = whale_manager.get_discovery_data()
+    for k, v in disc_data.items():
+        if k not in whale_db:
+            whale_db[k] = v
         
     trades = []
     if os.path.exists("ml_training_data.json"):
@@ -428,10 +429,9 @@ async def get_whales(mode: str = "ALL", _: bool = Depends(require_auth)):
             if pnl > 0:
                 stats[w]["wins"] += 1
 
-                
     result = []
     for w, s in stats.items():
-        if s["total"] == 0:
+        if s["status"] != "WHITELIST" and s["total"] == 0:
             continue
         result.append({
             "wallet": w,
@@ -439,15 +439,127 @@ async def get_whales(mode: str = "ALL", _: bool = Depends(require_auth)):
             "total": s["total"],
             "win_rate": (s["wins"]/s["actioned"]*100) if s["actioned"] > 0 else 0,
             "profit": s["profit"],
-            "modes": ", ".join(sorted(s["modes"]))
+            "modes": ", ".join(sorted(s["modes"])) if s["modes"] else "STANDBY"
         })
         
-    result.sort(key=lambda x: x["profit"], reverse=True)
+    result.sort(key=lambda x: (x["status"] == "WHITELIST", x["profit"]), reverse=True)
     
     return {
-        "total_db": len(whale_db),
-        "active_whitelists": sum(1 for v in whale_db.values() if v.get("status") == "WHITELIST"),
+        "total_db": whale_manager.get_total_whales(),
+        "active_whitelists": len(wl_set),
         "whales": result
+    }
+
+
+@app.get("/api/whales/neutral")
+async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", _: bool = Depends(require_auth)):
+    """
+    Evaluates and returns neutral whales scored by the AI Whale Scorer gauntlet,
+    highlighting high-conviction Alpha candidates with an option to whitelist.
+    """
+    ranked_path = os.path.join(BASE_DIR, "data", "neutral_whales_ranked.json")
+    ranked = []
+    if os.path.exists(ranked_path):
+        try:
+            with open(ranked_path, "r", encoding="utf-8") as f:
+                ranked = json.load(f)
+        except Exception as e:
+            logging.warning(f"Error loading {ranked_path}: {e}")
+
+    disc_data = whale_manager.get_discovery_data()
+    total_neutral = sum(1 for v in disc_data.values() if v.get("status", "NEUTRAL").upper() == "NEUTRAL")
+    wl_set = whale_manager.get_whitelist_set()
+    candidates = []
+
+    for r in ranked:
+        w = r.get("wallet", "")
+        if not w:
+            continue
+        s7 = r.get("7d", {})
+        s1 = r.get("1d", {})
+        s30 = r.get("30d", {})
+        wr = float(s7.get("winrate", 0.0))
+        profit = float(s7.get("realized", 0.0))
+        trades = int(s7.get("trades", 0))
+        tags = r.get("tags", [])
+        native_bal = float(s7.get("native_balance", 0.0))
+
+        data = {
+            "winrate_7d": wr,
+            "trades_7d": trades,
+            "profit_7d": profit,
+            "tags": tags,
+        }
+
+        score_res = ai_whale_scorer.score_wallet(w, data)
+        is_wl = w in wl_set
+
+        # Filter option handling
+        if filter == "alpha" and (score_res.score < 70 or score_res.status == "BLACKLIST"):
+            continue
+        elif filter == "consistent" and (wr < 90.0 or trades < 5):
+            continue
+        elif filter == "high_pnl" and profit < 500.0:
+            continue
+
+        candidates.append({
+            "wallet": w,
+            "ai_score": score_res.score,
+            "ai_status": score_res.status,
+            "style": score_res.style,
+            "summary": score_res.summary,
+            "red_flags": score_res.red_flags,
+            "winrate_7d": wr,
+            "profit_7d": profit,
+            "trades_7d": trades,
+            "buy_7d": int(s7.get("buy", 0) or 0),
+            "sell_7d": int(s7.get("sell", 0) or 0),
+            "profit_1d": float(s1.get("realized", 0.0)),
+            "trades_1d": int(s1.get("trades", 0) or 0),
+            "profit_30d": float(s30.get("realized", 0.0)),
+            "trades_30d": int(s30.get("trades", 0) or 0),
+            "native_balance": native_bal,
+            "tags": tags,
+            "is_whitelisted": is_wl,
+        })
+
+    # Sort candidates
+    if sort_by == "winrate":
+        candidates.sort(key=lambda x: (x["winrate_7d"], x["profit_7d"]), reverse=True)
+    elif sort_by == "score":
+        candidates.sort(key=lambda x: (x["ai_score"], x["profit_7d"]), reverse=True)
+    elif sort_by == "trades":
+        candidates.sort(key=lambda x: (x["trades_7d"], x["profit_7d"]), reverse=True)
+    else:  # default pnl
+        candidates.sort(key=lambda x: (x["profit_7d"], x["ai_score"]), reverse=True)
+
+    return {
+        "total_neutral_db": total_neutral,
+        "ranked_count": len(candidates),
+        "active_whitelists": len(wl_set),
+        "candidates": candidates,
+    }
+
+
+@app.post("/api/whales/whitelist")
+async def update_whale_whitelist(action: WhitelistAction, _: bool = Depends(require_auth)):
+    wallet = action.wallet.strip()
+    status = action.status.strip().upper()
+    if status not in ["WHITELIST", "NEUTRAL", "BLACKLIST"]:
+        raise HTTPException(status_code=400, detail="Status must be WHITELIST, NEUTRAL, or BLACKLIST")
+
+    if len(wallet) < 32 or len(wallet) > 44:
+        raise HTTPException(status_code=400, detail="Invalid Solana wallet address format")
+
+    ok = whale_manager.set_whale_status(wallet, status)
+    if not ok:
+        raise HTTPException(status_code=500, detail=f"Failed to update whale status to {status}")
+
+    return {
+        "success": True,
+        "wallet": wallet,
+        "status": status,
+        "active_whitelists": len(whale_manager.get_whitelist())
     }
 
 @app.get("/api/logs")
