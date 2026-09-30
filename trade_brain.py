@@ -367,16 +367,18 @@ async def restore_active_trades():
             except Exception:
                 entry_time = now_utc
 
-            # Age check: drop positions older than MAX_RESUME_AGE_HOURS
+            # Paper positions can be discarded after the configured simulation horizon.
+            # Live positions must be reconciled regardless of age; age never proves closure.
             age_hours = (now_utc - entry_time).total_seconds() / 3600.0
-            if age_hours > max_resume_hours:
+            if not _is_live() and age_hours > max_resume_hours:
                 log.warning(
                     f"Dropping stale orphaned trade {token[:8]} (age {age_hours:.1f}h > {max_resume_hours}h limit)."
                 )
                 continue
-            
+
+            position = Position.from_dict(t)
             async with STATE._lock:
-                STATE.add_position(token, t)
+                STATE.add_position(token, position)
 
             wallet = t.get("whale_wallet") or t.get("wallet", "")
             entry_price = t.get("entry_price", 0.0)
@@ -392,9 +394,12 @@ async def restore_active_trades():
                     wallet_address = os.getenv("WALLET_ADDRESS", "")
 
             if _is_live():
-                task = asyncio.create_task(
-                    monitor_gmgn_position(wallet, token, entry_price, entry_time, trade_size, strategy_order_id, wallet_address)
-                )
+                if position.state == PositionState.PENDING_ENTRY:
+                    task = asyncio.create_task(monitor_pending_gmgn_buy(token, wallet_address))
+                else:
+                    task = asyncio.create_task(
+                        monitor_gmgn_position(wallet, token, entry_price, entry_time, trade_size, strategy_order_id, wallet_address)
+                    )
             else:
                 task = asyncio.create_task(
                     monitor_position(wallet, token, entry_price, entry_time, trade_size,
@@ -510,11 +515,18 @@ async def close_gmgn_trade(
     trade_size: float,
     reason: str,
     real_profit_usd=None,
+    settlement_confirmed: bool = False,
 ):
     """
     Record a GMGN-executed live trade close to the ML dataset and send Telegram exit alert.
     Called by monitor_gmgn_position when the strategy fires or a timeout sell completes.
     """
+    if not settlement_confirmed:
+        log.error(
+            f"Refusing to close live position {token[:8]} without confirmed settlement."
+        )
+        return False
+
     hold_duration = (datetime.now(timezone.utc) - entry_time).total_seconds()
     
     fill_available = real_profit_usd is not None
@@ -534,6 +546,7 @@ async def close_gmgn_trade(
         if pos and isinstance(pos, Position):
             pos.mark_closed(exit_price, reason)
         _active_trades.pop(token, None)
+    await _persist_active_positions_now()
 
     if fill_available:
         log.info(
@@ -567,6 +580,213 @@ async def close_gmgn_trade(
     # Record in RAM (flushed asynchronously by state flush loop)
     STATE.record_closed_trade(trade_record)
     send_exit_alert(trade_record)
+    return True
+
+
+def _gmgn_sell_fill(sell_result: dict, fallback_exit_price: float,
+                    entry_price: float, trade_size: float):
+    """Extract confirmed sell price and profit without inventing confirmation."""
+    exit_price = fallback_exit_price
+    real_profit = None
+    report = sell_result.get("report") or {}
+    price_str = report.get("price_usd") or sell_result.get("price_usd") or sell_result.get("price")
+    fill_price_available = price_str not in (None, "")
+    if price_str not in (None, ""):
+        try:
+            exit_price = float(price_str)
+        except (TypeError, ValueError):
+            pass
+    profit_str = (
+        report.get("realized_profit")
+        or report.get("usdt_profit")
+        or report.get("profit_usd")
+        or sell_result.get("realized_profit")
+    )
+    if profit_str not in (None, ""):
+        try:
+            real_profit = float(profit_str)
+        except (TypeError, ValueError):
+            pass
+    if real_profit is None and fill_price_available and exit_price > 0 and entry_price > 0:
+        real_profit = trade_size * ((exit_price - entry_price) / entry_price)
+    return exit_price, real_profit
+
+
+async def _persist_active_positions_now():
+    """Durably save order IDs at live submission boundaries for restart recovery."""
+    async with STATE._lock:
+        snapshot = STATE.snapshot_active()
+    await asyncio.to_thread(_save_json_atomic, LIVE_TRADES_FILE, snapshot)
+
+
+async def _attempt_confirmed_gmgn_sell(
+    wallet: str,
+    token: str,
+    entry_time: datetime,
+    entry_price: float,
+    fallback_exit_price: float,
+    trade_size: float,
+    reason: str,
+    wallet_address: str,
+) -> bool:
+    """Submit or reconcile one sell and close locally only after confirmation."""
+    pos = STATE.get_position(token)
+    pending_order_id = getattr(pos, "exit_order_id", None) if isinstance(pos, Position) else None
+    new_submission = not pending_order_id
+
+    if (
+        isinstance(pos, Position)
+        and pos.state == PositionState.PENDING_EXIT
+        and not pending_order_id
+        and pos.exit_confirmation_status == "SUBMISSION_UNKNOWN"
+    ):
+        balance = await get_spl_token_balance(wallet_address, token)
+        if balance == 0.0:
+            log.warning(
+                f"GMGN sell submission for {token[:8]} had no order ID, but the on-chain "
+                "token balance is now zero. Closing by balance reconciliation."
+            )
+            return await close_gmgn_trade(
+                wallet, token, entry_time, entry_price, fallback_exit_price,
+                trade_size, f"{pos.exit_reason or reason}_BALANCE_RECONCILED", None,
+                settlement_confirmed=True,
+            )
+        return False
+
+    if pending_order_id:
+        sell_result = await wait_for_order_confirmed(pending_order_id, max_wait_seconds=15)
+        sell_result["order_id"] = pending_order_id
+    else:
+        if isinstance(pos, Position):
+            if pos.can_exit():
+                pos.begin_exit(reason)
+            elif pos.state != PositionState.PENDING_EXIT:
+                return False
+        sell_result = await execute_gmgn_sell_all(wallet_address, token)
+        pending_order_id = sell_result.get("order_id")
+        if isinstance(pos, Position) and pending_order_id:
+            pos.exit_order_id = str(pending_order_id)
+            pos.exit_confirmation_status = str(sell_result.get("status") or "PENDING")
+            await _persist_active_positions_now()
+
+    if not sell_result.get("confirmed"):
+        status = str(sell_result.get("status") or sell_result.get("_error") or "UNKNOWN")
+        if isinstance(pos, Position):
+            pos.exit_confirmation_status = status.upper()
+            if status.lower() in ("failed", "expired"):
+                pos.exit_order_id = None
+                pos.revert_exit()
+                await _persist_active_positions_now()
+            elif not pending_order_id:
+                # The process may have submitted before its response timed out. Without
+                # an order ID, resubmission could double-sell; reconcile by balance only.
+                pos.exit_confirmation_status = "SUBMISSION_UNKNOWN"
+                await _persist_active_positions_now()
+        if new_submission:
+            log.critical(
+                f"GMGN sell for {token[:8]} is not confirmed (status={status}). "
+                "Position remains open in exposure accounting; the original order will be reconciled."
+            )
+            send_error_alert(
+                f"🚨 GMGN SELL NOT CONFIRMED\n"
+                f"Token: {token[:8]}...\n"
+                f"Order: {pending_order_id or 'not returned'}\n"
+                f"Status: {status}\n"
+                f"Position remains tracked; no duplicate close was recorded."
+            )
+        return False
+
+    if isinstance(pos, Position):
+        pos.exit_confirmation_status = "CONFIRMED"
+    exit_price, real_profit = _gmgn_sell_fill(
+        sell_result, fallback_exit_price, entry_price, trade_size
+    )
+    return await close_gmgn_trade(
+        wallet, token, entry_time, entry_price, exit_price,
+        trade_size, reason, real_profit, settlement_confirmed=True,
+    )
+
+
+def _gmgn_confirmed_entry_price(confirmation: dict, fallback: float) -> float:
+    value = (
+        confirmation.get("price_usd")
+        or confirmation.get("price")
+        or (confirmation.get("report") or {}).get("price_usd")
+    )
+    try:
+        return float(value) if value not in (None, "") else fallback
+    except (TypeError, ValueError):
+        return fallback
+
+
+async def monitor_pending_gmgn_buy(token: str, wallet_address: str):
+    """Reconcile a submitted buy until it is confirmed or terminally rejected."""
+    while True:
+        pos = STATE.get_position(token)
+        if not isinstance(pos, Position) or pos.state != PositionState.PENDING_ENTRY:
+            return
+        order_id = pos.entry_order_id
+        if not order_id:
+            balance = await get_spl_token_balance(wallet_address, token)
+            if balance > 0:
+                pos.entry_confirmation_status = "BALANCE_CONFIRMED"
+                pos.strategy_order_id = "POLLING_FALLBACK"
+                pos.transition_to(PositionState.OPEN)
+                await _persist_active_positions_now()
+                log.warning(
+                    f"GMGN buy submission for {token[:8]} timed out without an order ID, "
+                    "but an on-chain token balance is now present. Monitoring as an open position."
+                )
+                send_trade_alert({
+                    "token": token,
+                    "side": "BUY",
+                    "mode": TRADE_MODE,
+                    "wallet": pos.wallet,
+                    "amount": f"${pos.trade_size:.2f} via GMGN (balance-confirmed after timeout)",
+                })
+                await monitor_gmgn_position(
+                    pos.wallet, token, pos.entry_price,
+                    datetime.fromisoformat(pos.entry_time), pos.trade_size,
+                    pos.strategy_order_id, wallet_address,
+                )
+                return
+            await asyncio.sleep(10.0)
+            continue
+
+        result = await wait_for_order_confirmed(order_id, max_wait_seconds=30)
+        status = str(result.get("status") or "UNKNOWN")
+        pos.entry_confirmation_status = status.upper()
+
+        if result.get("confirmed"):
+            pos.entry_price = _gmgn_confirmed_entry_price(result, pos.entry_price)
+            pos.current_price = pos.entry_price
+            pos.entry_confirmation_status = "CONFIRMED"
+            pos.transition_to(PositionState.OPEN)
+            await _persist_active_positions_now()
+            log.info(f"Late GMGN buy confirmation reconciled for {token[:8]} (order {order_id}).")
+            send_trade_alert({
+                "token": token,
+                "side": "BUY",
+                "mode": TRADE_MODE,
+                "wallet": pos.wallet,
+                "amount": f"${pos.trade_size:.2f} via GMGN (late confirmation reconciled)",
+            })
+            await monitor_gmgn_position(
+                pos.wallet, token, pos.entry_price,
+                datetime.fromisoformat(pos.entry_time), pos.trade_size,
+                pos.strategy_order_id, wallet_address,
+            )
+            return
+
+        if status.lower() in ("failed", "expired"):
+            pos.transition_to(PositionState.FAILED)
+            async with _dashboard_lock:
+                STATE.remove_position(token)
+            await _persist_active_positions_now()
+            log.error(f"GMGN buy {order_id} ended as {status}; released reserved exposure for {token[:8]}.")
+            return
+
+        await asyncio.sleep(10.0)
 
 
 async def monitor_gmgn_position(
@@ -599,6 +819,15 @@ async def monitor_gmgn_position(
             await asyncio.sleep(POLL_INTERVAL + random.uniform(0.1, 1.5))
             elapsed = (datetime.now(timezone.utc) - entry_time).total_seconds()
 
+            pending_pos = STATE.get_position(token)
+            if isinstance(pending_pos, Position) and pending_pos.exit_order_id:
+                if await _attempt_confirmed_gmgn_sell(
+                    wallet, token, entry_time, entry_price, last_price,
+                    trade_size, pending_pos.exit_reason or "EXIT_RECONCILIATION", wallet_address,
+                ):
+                    break
+                continue
+
             # Check if GMGN natively executed the Stop-Loss / Take-Profit on-chain (balance = 0)
             if elapsed > 8.0 and (time.time() - last_balance_check > 10.0) and wallet_address:
                 last_balance_check = time.time()
@@ -618,11 +847,10 @@ async def monitor_gmgn_position(
                         f"GMGN: On-chain token balance for {token[:8]} is 0 — GMGN closed the position. "
                         f"Reason inferred from last price as {inferred}."
                     )
-                    async with _dashboard_lock:
-                        _active_trades.pop(token, None)
                     await close_gmgn_trade(
                         wallet, token, entry_time, entry_price, last_price,
-                        trade_size, f"{inferred}_INFERRED", None
+                        trade_size, f"{inferred}_INFERRED", None,
+                        settlement_confirmed=True,
                     )
                     break
 
@@ -655,30 +883,12 @@ async def monitor_gmgn_position(
 
             if exit_reason:
                 log.info(f"GMGN fallback: {exit_reason} for {token[:8]}. Selling via GMGN...")
-                sell_result = await execute_gmgn_sell_all(wallet_address, token)
-                real_profit = None
-                if sell_result.get("confirmed"):
-                    report = sell_result.get("report", {})
-                    price_str = report.get("price_usd", "")
-                    if price_str:
-                        try:
-                            exit_price = float(price_str)
-                        except ValueError:
-                            pass
-                    profit_str = report.get("realized_profit") or report.get("usdt_profit") or report.get("profit_usd")
-                    if profit_str:
-                        try:
-                            real_profit = float(profit_str)
-                        except ValueError:
-                            pass
-                    if real_profit is None and exit_price > 0 and entry_price > 0:
-                        real_profit = trade_size * ((exit_price - entry_price) / entry_price)
-
-                await close_gmgn_trade(
+                if await _attempt_confirmed_gmgn_sell(
                     wallet, token, entry_time, entry_price, exit_price,
-                    trade_size, exit_reason, real_profit
-                )
-                break
+                    trade_size, exit_reason, wallet_address,
+                ):
+                    break
+                continue
         return
 
     # ── Strategy mode: poll GMGN every 30 seconds ─────────────────────────────
@@ -690,6 +900,16 @@ async def monitor_gmgn_position(
         
         current_time = datetime.now(timezone.utc)
         elapsed = (current_time - entry_time).total_seconds()
+
+        pending_pos = STATE.get_position(token)
+        if isinstance(pending_pos, Position) and pending_pos.exit_order_id:
+            if await _attempt_confirmed_gmgn_sell(
+                wallet, token, entry_time, entry_price,
+                pending_pos.current_price or entry_price, trade_size,
+                pending_pos.exit_reason or "EXIT_RECONCILIATION", wallet_address,
+            ):
+                break
+            continue
         
         # 1. Update the UI Dashboard frequently
         current_price = await get_live_price(token)
@@ -711,56 +931,24 @@ async def monitor_gmgn_position(
         if TIMEOUT_ENABLED and elapsed >= MAX_HOLD_SECONDS:
             log.info(f"GMGN: Timeout for {token[:8]}. Cancelling strategy + force selling...")
             await cancel_strategy_order(wallet_address, strategy_order_id)
-            sell_result = await execute_gmgn_sell_all(wallet_address, token)
-
-            exit_price = entry_price
-            real_profit = None
-            if sell_result.get("confirmed"):
-                report = sell_result.get("report", {})
-                price_str = report.get("price_usd", "")
-                if price_str:
-                    try:
-                        exit_price = float(price_str)
-                    except ValueError:
-                        pass
-
-            async with _dashboard_lock:
-                _active_trades.pop(token, None)
-            await close_gmgn_trade(
-                wallet, token, entry_time, entry_price, exit_price,
-                trade_size, "TIMEOUT", real_profit
-            )
-            break
+            if await _attempt_confirmed_gmgn_sell(
+                wallet, token, entry_time, entry_price, entry_price,
+                trade_size, "TIMEOUT", wallet_address,
+            ):
+                break
+            continue
 
         # Whale-sold / external exit request
         requested = STATE.pop_exit_request(token)
         if requested:
             log.info(f"GMGN: {requested} for {token[:8]}. Cancelling strategy + selling...")
             await cancel_strategy_order(wallet_address, strategy_order_id)
-            sell_result = await execute_gmgn_sell_all(wallet_address, token)
-            exit_price = entry_price
-            real_profit = None
-            if sell_result.get("confirmed"):
-                report = sell_result.get("report", {})
-                price_str = report.get("price_usd", "")
-                if price_str:
-                    try:
-                        exit_price = float(price_str)
-                    except ValueError:
-                        pass
-                profit_str = report.get("realized_profit") or report.get("usdt_profit")
-                if profit_str:
-                    try:
-                        real_profit = float(profit_str)
-                    except ValueError:
-                        pass
-            async with _dashboard_lock:
-                _active_trades.pop(token, None)
-            await close_gmgn_trade(
-                wallet, token, entry_time, entry_price, exit_price,
-                trade_size, requested, real_profit
-            )
-            break
+            if await _attempt_confirmed_gmgn_sell(
+                wallet, token, entry_time, entry_price, entry_price,
+                trade_size, requested, wallet_address,
+            ):
+                break
+            continue
 
         # Panic sell check (triggered by Telegram UI → gmgn_panic.json)
         if os.path.exists("gmgn_panic.json"):
@@ -770,24 +958,12 @@ async def monitor_gmgn_position(
                 if panic_data.get("panic_timestamp", 0) > entry_time.timestamp():
                     log.warning(f"GMGN: PANIC SELL triggered for {token[:8]}!")
                     await cancel_strategy_order(wallet_address, strategy_order_id)
-                    sell_result = await execute_gmgn_sell_all(wallet_address, token)
-                    exit_price = entry_price
-                    real_profit = None
-                    if sell_result.get("confirmed"):
-                        report = sell_result.get("report", {})
-                        price_str = report.get("price_usd", "")
-                        if price_str:
-                            try:
-                                exit_price = float(price_str)
-                            except ValueError:
-                                pass
-                    async with _dashboard_lock:
-                        _active_trades.pop(token, None)
-                    await close_gmgn_trade(
-                        wallet, token, entry_time, entry_price, exit_price,
-                        trade_size, "PANIC_SELL", real_profit
-                    )
-                    break
+                    if await _attempt_confirmed_gmgn_sell(
+                        wallet, token, entry_time, entry_price, entry_price,
+                        trade_size, "PANIC_SELL", wallet_address,
+                    ):
+                        break
+                    continue
             except Exception as e:
                 log.warning(f"GMGN: Failed to read gmgn_panic.json: {e}")
 
@@ -807,42 +983,20 @@ async def monitor_gmgn_position(
 
                 if profit_pct >= TAKE_PROFIT_PCT:
                     log.info(f"GMGN POLLING FALLBACK: Take Profit (+{profit_pct:.1f}%) hit for {token[:8]}! Executing sell...")
-                    sell_res = await execute_gmgn_sell_all(wallet_address, token)
-                    exit_price = current_price
-                    real_pnl = None
-                    if sell_res.get("confirmed"):
-                        report = sell_res.get("report", {})
-                        p_str = report.get("price_usd", "")
-                        if p_str:
-                            try: exit_price = float(p_str)
-                            except: pass
-                        real_pnl = report.get("realized_profit") or report.get("usdt_profit")
-                        if real_pnl:
-                            try: real_pnl = float(real_pnl)
-                            except: real_pnl = None
-                    async with _dashboard_lock:
-                        _active_trades.pop(token, None)
-                    await close_gmgn_trade(wallet, token, entry_time, entry_price, exit_price, trade_size, "TAKE_PROFIT", real_pnl)
-                    break
+                    if await _attempt_confirmed_gmgn_sell(
+                        wallet, token, entry_time, entry_price, current_price,
+                        trade_size, "TAKE_PROFIT", wallet_address,
+                    ):
+                        break
+                    continue
                 elif profit_pct <= STOP_LOSS_PCT:
                     log.info(f"GMGN POLLING FALLBACK: Stop Loss ({profit_pct:.1f}%) hit for {token[:8]}! Executing sell...")
-                    sell_res = await execute_gmgn_sell_all(wallet_address, token)
-                    exit_price = current_price
-                    real_pnl = None
-                    if sell_res.get("confirmed"):
-                        report = sell_res.get("report", {})
-                        p_str = report.get("price_usd", "")
-                        if p_str:
-                            try: exit_price = float(p_str)
-                            except: pass
-                        real_pnl = report.get("realized_profit") or report.get("usdt_profit")
-                        if real_pnl:
-                            try: real_pnl = float(real_pnl)
-                            except: real_pnl = None
-                    async with _dashboard_lock:
-                        _active_trades.pop(token, None)
-                    await close_gmgn_trade(wallet, token, entry_time, entry_price, exit_price, trade_size, "STOP_LOSS", real_pnl)
-                    break
+                    if await _attempt_confirmed_gmgn_sell(
+                        wallet, token, entry_time, entry_price, current_price,
+                        trade_size, "STOP_LOSS", wallet_address,
+                    ):
+                        break
+                    continue
             continue
 
         # Poll strategy status every 30s to avoid rate limits
@@ -885,7 +1039,8 @@ async def monitor_gmgn_position(
     
                 await close_gmgn_trade(
                     wallet, token, entry_time, entry_price, exit_price,
-                    trade_size, exit_reason, real_profit_usd
+                    trade_size, exit_reason, real_profit_usd,
+                    settlement_confirmed=True,
                 )
                 break
     
@@ -1501,15 +1656,17 @@ async def record_trade(trade_data: dict):
                     )
                     continue
 
-                if MOMENTUM_FILTER_ENABLED and not is_consensus:
+                # Consensus is a signal feature, not permission to bypass a hard risk gate.
+                if MOMENTUM_FILTER_ENABLED:
                     is_safe = await check_momentum(token_address)
                     if not is_safe:
                         continue
                 
                 sol_mint = "So11111111111111111111111111111111111111112"
 
-                # Dynamic Allocation: double size for Multi-Whale Consensus signals (up to 50% max)
-                effective_alloc_pct = min(50.0, ALLOCATION_PCT * 2.0) if is_consensus else ALLOCATION_PCT
+                # Keep consensus at the configured allocation until prospective results
+                # demonstrate that it improves net follower returns.
+                effective_alloc_pct = ALLOCATION_PCT
 
                 # Portfolio-level exposure cap. ALLOCATION_PCT alone is a PER-TRADE limit, so
                 # MAX_CONCURRENT_TRADES trades could each take their full share and put the
@@ -1736,44 +1893,108 @@ async def record_trade(trade_data: dict):
                     )
 
                     if not buy_result.get("success"):
+                        if buy_result.get("submission_unknown"):
+                            entry_time = datetime.now(timezone.utc)
+                            pos = Position(
+                                token=token_address,
+                                symbol=symbol,
+                                wallet=wallet,
+                                entry_price=entry_price,
+                                trade_size=trade_size,
+                                state=PositionState.PENDING_ENTRY,
+                                entry_time=entry_time.isoformat(),
+                                mode=TRADE_MODE,
+                                execution_engine="GMGN",
+                                strategy_order_id="POLLING_FALLBACK",
+                                entry_order_id=None,
+                                entry_confirmation_status="SUBMISSION_UNKNOWN",
+                                entry_mid_price=entry_mid_price,
+                            )
+                            pos.consensus_whales = set(recent_whales)
+                            async with _dashboard_lock:
+                                STATE.add_position(token_address, pos)
+                            await _persist_active_positions_now()
+                            send_error_alert(
+                                f"🚨 GMGN BUY SUBMISSION UNKNOWN\n"
+                                f"Token: {token_address[:8]}...\n"
+                                f"The CLI timed out without returning an order ID. "
+                                f"Exposure remains reserved while token balance is reconciled."
+                            )
+                            task = asyncio.create_task(
+                                monitor_pending_gmgn_buy(token_address, wallet_address)
+                            )
+                            _background_tasks.add(task)
+                            task.add_done_callback(_background_tasks.discard)
+                            continue
                         log.warning(
                             f"GMGN buy failed for {token_address[:8]}: "
                             f"{buy_result.get('_error', 'unknown error')}. Skipping."
                         )
                         continue
 
-                    # Wait for the buy order to be confirmed on-chain before recording position.
-                    # This prevents phantom positions where the order was submitted but never filled.
+                    # Reserve exposure as soon as GMGN accepts the order. A polling timeout is
+                    # an unknown outcome, not proof that the transaction failed.
+                    strategy_order_id = buy_result.get("strategy_order_id") or "POLLING_FALLBACK"
+                    entry_time = datetime.now(timezone.utc)
+                    pos = Position(
+                        token=token_address,
+                        symbol=symbol,
+                        wallet=wallet,
+                        entry_price=entry_price,
+                        trade_size=trade_size,
+                        state=PositionState.PENDING_ENTRY,
+                        entry_time=entry_time.isoformat(),
+                        mode=TRADE_MODE,
+                        execution_engine="GMGN",
+                        strategy_order_id=strategy_order_id,
+                        entry_order_id=buy_result["order_id"],
+                        entry_confirmation_status="PENDING",
+                        entry_mid_price=entry_mid_price,
+                    )
+                    pos.consensus_whales = set(recent_whales)
+                    async with _dashboard_lock:
+                        STATE.add_position(token_address, pos)
+                    await _persist_active_positions_now()
+
                     log.info(f"GMGN: Waiting for order {buy_result['order_id']} to confirm...")
                     confirmed = await wait_for_order_confirmed(buy_result["order_id"], max_wait_seconds=90)
                     if not confirmed.get("confirmed"):
-                        log.error(
-                            f"GMGN order {buy_result['order_id']} did not confirm "
-                            f"(status={confirmed.get('status')}). Not opening position."
+                        status = str(confirmed.get("status") or "UNKNOWN")
+                        pos.entry_confirmation_status = status.upper()
+                        if status.lower() in ("failed", "expired"):
+                            pos.transition_to(PositionState.FAILED)
+                            async with _dashboard_lock:
+                                STATE.remove_position(token_address)
+                            await _persist_active_positions_now()
+                            log.error(f"GMGN buy {buy_result['order_id']} ended as {status}; exposure released.")
+                            continue
+
+                        log.critical(
+                            f"GMGN buy {buy_result['order_id']} has an uncertain outcome "
+                            f"(status={status}). Exposure remains reserved while reconciliation continues."
                         )
                         send_error_alert(
-                            f"⚠️ GMGN BUY NOT CONFIRMED\n"
+                            f"🚨 GMGN BUY CONFIRMATION PENDING\n"
                             f"Token: {token_address[:8]}...\n"
                             f"Order: {buy_result['order_id']}\n"
-                            f"Status: {confirmed.get('status')}\n"
-                            f"No position opened. No capital lost."
+                            f"Status: {status}\n"
+                            f"Exposure remains reserved and the original order will be reconciled."
                         )
+                        task = asyncio.create_task(
+                            monitor_pending_gmgn_buy(token_address, wallet_address)
+                        )
+                        _background_tasks.add(task)
+                        task.add_done_callback(_background_tasks.discard)
                         continue
 
-                    strategy_order_id = buy_result.get("strategy_order_id")
-                    
-                    # Extract actual fill price if available from GMGN order response
-                    actual_price_str = confirmed.get("price_usd") or confirmed.get("price") or (confirmed.get("report") or {}).get("price_usd")
-                    if actual_price_str:
-                        try:
-                            entry_price = float(actual_price_str)
-                            log.info(f"GMGN actual buy fill price for {token_address[:8]}: ${entry_price:.8f}")
-                        except ValueError:
-                            pass
+                    entry_price = _gmgn_confirmed_entry_price(confirmed, entry_price)
+                    pos.entry_price = entry_price
+                    pos.current_price = entry_price
+                    pos.entry_confirmation_status = "CONFIRMED"
+                    pos.transition_to(PositionState.OPEN)
+                    log.info(f"GMGN actual buy fill price for {token_address[:8]}: ${entry_price:.8f}")
 
-                    # 🛡️ UNPROTECTED TRADE PROTECTION: If strategy creation failed, execute immediate market sell
-                    if not strategy_order_id:
-                        strategy_order_id = "POLLING_FALLBACK"
+                    if strategy_order_id == "POLLING_FALLBACK":
                         log.info(f"GMGN buy confirmed for {token_address[:8]} (strategy_order_id missing). Falling back to Python price-polling monitor.")
                     else:
                         log.info(
@@ -1788,23 +2009,6 @@ async def record_trade(trade_data: dict):
                     alert_data["mode"] = TRADE_MODE
                     alert_data["amount"] = f"${trade_size:.2f} via GMGN (TP+{int(TAKE_PROFIT_PCT)}% / SL-{int(abs(STOP_LOSS_PCT))}%)"
                     send_trade_alert(alert_data)
-
-                    entry_time = datetime.now(timezone.utc)
-                    pos = Position(
-                        token=token_address,
-                        symbol=symbol,
-                        wallet=wallet,
-                        entry_price=entry_price,
-                        trade_size=trade_size,
-                        entry_time=entry_time.isoformat(),
-                        mode=TRADE_MODE,
-                        execution_engine="GMGN",
-                        strategy_order_id=strategy_order_id,
-                        entry_mid_price=entry_mid_price,
-                    )
-                    pos.consensus_whales = set(recent_whales)
-                    async with _dashboard_lock:
-                        STATE.add_position(token_address, pos)
 
                     task = asyncio.create_task(
                         monitor_gmgn_position(

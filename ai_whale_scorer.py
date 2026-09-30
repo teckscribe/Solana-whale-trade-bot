@@ -18,6 +18,7 @@ import logging
 import argparse
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, asdict
+from trade_history import load_trade_history
 
 import httpx
 from dotenv import load_dotenv
@@ -66,12 +67,9 @@ class WhaleScore:
 
 
 def _get_copy_performance(wallet: str) -> Optional[dict]:
-    """Inspects WTB's actual recorded copy-trading performance for this whale in ml_training_data.json."""
+    """Inspect WTB's canonical recorded copy-trading history for this whale."""
     try:
-        if not os.path.exists("ml_training_data.json"):
-            return None
-        with open("ml_training_data.json", "r") as f:
-            trades = json.load(f)
+        trades = load_trade_history()
         whale_trades = [t for t in trades if t.get("whale_wallet") == wallet]
         if not whale_trades:
             return None

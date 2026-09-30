@@ -142,21 +142,22 @@ class TestConsensus(_RecordTradeBase):
         seen = {}
         async def capture_momentum(token, *a, **k):
             seen["momentum_called"] = True
-            return True
+            return False
         async def priced(_):
             return (1.0, "TKN", "Token", 1e9, 1e9)
-        # Consensus bypasses the momentum filter; assert that path by checking it isn't called
-        # and that the size is doubled via the log. Simplest observable: momentum not called.
+        # Consensus remains subject to the same momentum safety gate.
         with mock.patch.object(trade_brain, "get_token_price_usd", priced), \
              mock.patch.object(trade_brain, "check_momentum", capture_momentum), \
              mock.patch.object(trade_brain, "MOMENTUM_FILTER_ENABLED", True), \
-             mock.patch.object(trade_brain, "get_token_decimals", mock.AsyncMock(return_value=None)):
+             mock.patch.object(trade_brain, "WAVE_FILTER_ENABLED", False), \
+             mock.patch.object(trade_brain, "get_token_decimals", mock.AsyncMock(return_value=6)):
             run(trade_brain.record_trade({
                 "wallet": WHALE_B, "signature": "s2",
                 "bought": [{"mint": TOKEN, "amount": 1.0}],
                 "sold": [{"mint": SOL, "amount": 0.1}],
             }))
         self.assertEqual(set(STATE.recent_buy_signals[TOKEN]), {WHALE_A, WHALE_B})
+        self.assertTrue(seen.get("momentum_called"))
 
 
 class TestPaperRefund(_RecordTradeBase):

@@ -67,8 +67,13 @@ async def _run_gmgn_cli(*args) -> dict:
     cli_bin = shutil.which("gmgn-cli") or "gmgn-cli"
     node_bin = shutil.which("node") or "node"
     
-    # Primary: node + cli_bin
-    cmd = [node_bin, cli_bin] + [str(a) for a in args]
+    # Windows installs expose a .cmd launcher; Unix installs expose the JS entrypoint.
+    # Choose once before launching. Never retry a timed-out swap with a second process:
+    # the first invocation may already have submitted the transaction.
+    if os.name == "nt" or str(cli_bin).lower().endswith((".cmd", ".bat", ".exe")):
+        cmd = [cli_bin] + [str(a) for a in args]
+    else:
+        cmd = [node_bin, cli_bin] + [str(a) for a in args]
     log.debug(f"gmgn-cli cmd: {' '.join(cmd)}")
 
     raw_output = ""
@@ -79,28 +84,20 @@ async def _run_gmgn_cli(*args) -> dict:
         if os.getenv("WALLET_PRIVATE_KEY"):
             env["GMGN_PRIVATE_KEY"] = os.getenv("WALLET_PRIVATE_KEY")
 
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_CLI_TIMEOUT)
             raw_output = stdout.decode().strip()
             err_output = stderr.decode().strip()
-        except Exception:
-            # Fallback: run gmgn-cli directly
-            direct_cmd = [cli_bin] + [str(a) for a in args]
-            proc = await asyncio.create_subprocess_exec(
-                *direct_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_CLI_TIMEOUT)
-            raw_output = stdout.decode().strip()
-            err_output = stderr.decode().strip()
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            raise
 
         if proc.returncode != 0:
             log.error(f"gmgn-cli exit {proc.returncode}. stderr: {err_output}. stdout: {raw_output[:300]}")
@@ -185,7 +182,11 @@ async def execute_gmgn_buy(
 
     if result.get("_error"):
         log.error(f"GMGN buy failed: {result['_error']}")
-        return {"success": False, "_error": result["_error"]}
+        return {
+            "success": False,
+            "_error": result["_error"],
+            "submission_unknown": result["_error"] == "cli_timeout",
+        }
 
     order_id = result.get("order_id")
     if not order_id:
@@ -340,6 +341,10 @@ async def execute_gmgn_sell_all(wallet_address: str, token_address: str) -> dict
         return {"success": False, "confirmed": False}
 
     confirmed = await wait_for_order_confirmed(order_id, max_wait_seconds=90)
-    return {**confirmed, "success": confirmed.get("confirmed", False)}
+    return {
+        **confirmed,
+        "order_id": order_id,
+        "success": confirmed.get("confirmed", False),
+    }
 
 

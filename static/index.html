@@ -414,6 +414,16 @@
                             <input type="text" id="neutral-whale-search" placeholder="Search wallet address or tag..." aria-label="Search neutral whales">
                         </div>
                         <div class="select-group">
+                            <label for="neutral-whale-source" class="filter-label">Channel:</label>
+                            <select id="neutral-whale-source" class="select-input">
+                                <option value="all">⚡ All 4 Channels</option>
+                                <option value="gmgn">🟢 GMGN Smart Money</option>
+                                <option value="dexscreener">🦅 DexScreener Breakouts</option>
+                                <option value="dex_onchain">🌊 DEX On-Chain Pools</option>
+                                <option value="cluster">🎯 Multi-Whale Consensus</option>
+                            </select>
+                        </div>
+                        <div class="select-group">
                             <label for="neutral-whale-filter" class="filter-label">Filter:</label>
                             <select id="neutral-whale-filter" class="select-input">
                                 <option value="all">🛡️ Safe Alphas (Passed All Filters)</option>
@@ -432,8 +442,8 @@
                                 <option value="trades">7D Trade Count</option>
                             </select>
                         </div>
-                        <button id="btn-scan-neutral" class="btn btn-primary" title="Trigger On-Chain Alpha Whale Discovery Scan" style="padding: 6px 12px; font-size: 0.78rem;">
-                            <span>⚡ Scan Whitelist</span>
+                        <button id="btn-scan-neutral" class="btn btn-primary" title="Trigger 4-Channel On-Chain Alpha Whale Discovery Scan" style="padding: 6px 14px; font-size: 0.78rem;">
+                            <span>⚡ Scan All 4 Channels</span>
                         </button>
                         <button id="btn-refresh-neutral" class="btn btn-secondary" title="Refresh Neutral Candidates" style="padding: 6px 10px;">
                             <span>🔄</span>
@@ -446,9 +456,9 @@
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-size: 1.3rem;">🛡️</span>
                         <div>
-                            <div style="color: var(--emerald-profit); font-weight: 700; font-size: 0.85rem;">Institutional Anti-Toxicity Filtration Active</div>
+                            <div style="color: var(--emerald-profit); font-weight: 700; font-size: 0.85rem;">Institutional Anti-Toxicity Filtration Active Across 4 Channels</div>
                             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
-                                Enforcing 4 hard filters: Banned Tags (arbitrager/mev/sniper/axiom), Trade Frequency (≤ 200/wk), AI Gauntlet (Score ≥ 50), and Negative Copy History.
+                                Enforcing hard safety filters on GMGN, DexScreener, DEX On-Chain, & Cluster alphas: Banned Tags, Machine Frequency (≤ 200/wk), and AI Score ≥ 50.
                             </div>
                         </div>
                     </div>
@@ -463,6 +473,7 @@
                         <thead>
                             <tr>
                                 <th>Wallet Address</th>
+                                <th>Source Channel</th>
                                 <th>AI Score & Style</th>
                                 <th>Safety Status</th>
                                 <th>7D Win Rate</th>
@@ -475,7 +486,7 @@
                         </thead>
                         <tbody id="neutral-whale-tbody">
                             <tr>
-                                <td colspan="9" class="table-loading">Loading neutral whale candidates...</td>
+                                <td colspan="10" class="table-loading">Loading neutral whale candidates...</td>
                             </tr>
                         </tbody>
                     </table>

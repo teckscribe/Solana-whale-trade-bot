@@ -74,6 +74,10 @@ class Position:
         mode: str = "PAPER",
         execution_engine: str = "JUPITER",
         strategy_order_id: Optional[str] = None,
+        entry_order_id: Optional[str] = None,
+        entry_confirmation_status: str = "CONFIRMED",
+        exit_order_id: Optional[str] = None,
+        exit_confirmation_status: str = "",
         entry_mid_price: float = 0.0,
     ):
         self.token = str(token)
@@ -96,6 +100,10 @@ class Position:
         self.mode = str(mode).upper()
         self.execution_engine = str(execution_engine)
         self.strategy_order_id = strategy_order_id
+        self.entry_order_id = entry_order_id
+        self.entry_confirmation_status = str(entry_confirmation_status)
+        self.exit_order_id = exit_order_id
+        self.exit_confirmation_status = str(exit_confirmation_status)
 
         # Real-time state
         self.current_price = float(entry_price)
@@ -270,6 +278,10 @@ class Position:
             "state": self.state.value,
             "execution_engine": self.execution_engine,
             "strategy_order_id": self.strategy_order_id,
+            "entry_order_id": self.entry_order_id,
+            "entry_confirmation_status": self.entry_confirmation_status,
+            "exit_order_id": self.exit_order_id,
+            "exit_confirmation_status": self.exit_confirmation_status,
             "high_water_mark_price": self.high_water_mark_price,
             "trailing_stop_active": self.trailing_stop_active,
             "exit_price": self.exit_price,
@@ -317,6 +329,10 @@ class Position:
             mode=data.get("mode", "PAPER"),
             execution_engine=data.get("execution_engine", "JUPITER"),
             strategy_order_id=data.get("strategy_order_id"),
+            entry_order_id=data.get("entry_order_id"),
+            entry_confirmation_status=data.get("entry_confirmation_status", "CONFIRMED"),
+            exit_order_id=data.get("exit_order_id"),
+            exit_confirmation_status=data.get("exit_confirmation_status", ""),
             entry_mid_price=float(data.get("entry_mid_price") or 0.0),
         )
         pos.consensus_whales = set(data.get("consensus_whales") or [pos.wallet])

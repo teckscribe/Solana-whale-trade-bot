@@ -637,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const subviewNeutralCount = document.getElementById('subview-neutral-count');
 
     const neutralWhaleSearch = document.getElementById('neutral-whale-search');
+    const neutralWhaleSource = document.getElementById('neutral-whale-source');
     const neutralWhaleFilter = document.getElementById('neutral-whale-filter');
     const neutralWhaleSort = document.getElementById('neutral-whale-sort');
     const btnRefreshNeutral = document.getElementById('btn-refresh-neutral');
@@ -754,12 +755,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchNeutralWhales() {
         const tbody = document.getElementById('neutral-whale-tbody');
         if (tbody && neutralWhales.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="table-loading">Evaluating neutral whales through AI Scorer...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="table-loading">Evaluating neutral whales through AI Scorer...</td></tr>';
         }
         try {
             const filterVal = neutralWhaleFilter ? neutralWhaleFilter.value : 'all';
             const sortVal = neutralWhaleSort ? neutralWhaleSort.value : 'pnl';
-            const res = await apiFetch(`/api/whales/neutral?filter=${encodeURIComponent(filterVal)}&sort_by=${encodeURIComponent(sortVal)}`);
+            const sourceVal = neutralWhaleSource ? neutralWhaleSource.value : 'all';
+            const res = await apiFetch(`/api/whales/neutral?filter=${encodeURIComponent(filterVal)}&sort_by=${encodeURIComponent(sortVal)}&source=${encodeURIComponent(sourceVal)}`);
             const data = await res.json();
 
             neutralWhales = data.candidates || [];
@@ -782,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error fetching neutral whales:', e);
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Failed to load neutral whales. Please retry.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Failed to load neutral whales. Please retry.</td></tr>';
             }
         }
     }
@@ -799,12 +801,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const wallet = (w.wallet || '').toLowerCase();
                 const tags = Array.isArray(w.tags) ? w.tags.join(' ').toLowerCase() : '';
                 const style = (w.style || '').toLowerCase();
-                return wallet.includes(query) || tags.includes(query) || style.includes(query);
+                const srcs = Array.isArray(w.discovery_sources) ? w.discovery_sources.join(' ').toLowerCase() : '';
+                const details = Array.isArray(w.channel_details) ? w.channel_details.join(' ').toLowerCase() : '';
+                return wallet.includes(query) || tags.includes(query) || style.includes(query) || srcs.includes(query) || details.includes(query);
             });
         }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="9" class="table-empty">No neutral whales match the selected filter or search query.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="table-empty">No neutral whales match the selected filter or search query.</td></tr>`;
             return;
         }
 
@@ -839,6 +843,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? `<button class="btn btn-primary btn-add-whale" onclick="window.addWhaleToWhitelist('${wallet}', this, false)">➕ Add</button>`
                     : `<button class="btn btn-secondary btn-add-whale" style="background:var(--rose-loss); color:#fff; border:none;" onclick="window.addWhaleToWhitelist('${wallet}', this, true)">⚠️ Override</button>`);
 
+            const sources = Array.isArray(w.discovery_sources) ? w.discovery_sources : ['gmgn'];
+            const channelDetails = Array.isArray(w.channel_details) ? w.channel_details : [];
+            const detailsTooltip = channelDetails.length > 0 ? channelDetails.join(' | ') : sources.join(', ');
+
+            const sourceBadges = sources.map(src => {
+                const s = src.toLowerCase();
+                let label = s.toUpperCase();
+                let icon = '⚡';
+                let cls = 'pill-source-gmgn';
+                if (s === 'gmgn') {
+                    label = 'GMGN';
+                    icon = '🟢';
+                    cls = 'pill-source-gmgn';
+                } else if (s === 'dexscreener') {
+                    label = 'DEXSCREENER';
+                    icon = '🦅';
+                    cls = 'pill-source-dexscreener';
+                } else if (s === 'dex_onchain' || s === 'onchain') {
+                    label = 'DEX POOLS';
+                    icon = '🌊';
+                    cls = 'pill-source-dex_onchain';
+                } else if (s === 'cluster') {
+                    label = 'CONSENSUS';
+                    icon = '🎯';
+                    cls = 'pill-source-cluster';
+                }
+                return `<span class="pill-source ${cls}" title="${detailsTooltip}">${icon} ${label}</span>`;
+            }).join('');
+
             html += `
                 <tr>
                     <td>
@@ -852,6 +885,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             <a href="https://gmgn.ai/sol/address/${wallet}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
                                 GMGN ↗
                             </a>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 3px; max-width: 140px;">
+                            ${sourceBadges}
                         </div>
                     </td>
                     <td>
@@ -934,6 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (whaleSearch) whaleSearch.addEventListener('input', filterAndRenderWhales);
     if (neutralWhaleSearch) neutralWhaleSearch.addEventListener('input', filterAndRenderNeutralWhales);
+    if (neutralWhaleSource) neutralWhaleSource.addEventListener('change', fetchNeutralWhales);
     if (neutralWhaleFilter) neutralWhaleFilter.addEventListener('change', fetchNeutralWhales);
     if (neutralWhaleSort) neutralWhaleSort.addEventListener('change', fetchNeutralWhales);
     if (btnRefreshNeutral) btnRefreshNeutral.addEventListener('click', fetchNeutralWhales);
@@ -964,13 +1003,18 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = '<span class="spinner-sm"></span> Scanning...';
         });
 
-        showToast('Initiating on-chain GMGN alpha whale discovery...', 'info');
+        const sourceVal = neutralWhaleSource ? neutralWhaleSource.value : 'all';
+        const sources = (sourceVal && sourceVal !== 'all')
+            ? [sourceVal]
+            : ['gmgn', 'dexscreener', 'dex_onchain', 'cluster'];
+
+        showToast('Initiating 4-channel alpha whale discovery scan...', 'info');
 
         try {
             const res = await apiFetch('/api/whales/scan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ limit: 15, status_target: 'NEUTRAL' })
+                body: JSON.stringify({ limit: 10, status_target: 'NEUTRAL', sources: sources })
             });
             const data = await res.json();
             if (data.status === 'already_running') {
@@ -996,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             btn.disabled = false;
                             btn.innerHTML = btn.id === 'scan-whales-btn'
                                 ? '<span class="btn-icon">⚡</span> Scan Whitelist Candidates'
-                                : '<span>⚡ Scan Whitelist</span>';
+                                : '<span>⚡ Scan All 4 Channels</span>';
                         });
 
                         showToast(stData.progress || 'Whale discovery scan completed!', 'success');
@@ -1017,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.disabled = false;
                 btn.innerHTML = btn.id === 'scan-whales-btn'
                     ? '<span class="btn-icon">⚡</span> Scan Whitelist Candidates'
-                    : '<span>⚡ Scan Whitelist</span>';
+                    : '<span>⚡ Scan All 4 Channels</span>';
             });
         }
     }

@@ -22,7 +22,9 @@ from connection_pool import get_client, dex_get, jupiter_get, get_rpc_client
 log = logging.getLogger("JupiterAPI")
 
 DEXSCREENER_PRICE_API = "https://api.dexscreener.com/latest/dex/tokens"
-JUPITER_QUOTE_API = "https://api.jup.ag/swap/v1/quote"
+JUPITER_QUOTE_API = os.getenv(
+    "JUPITER_QUOTE_API", "https://api.jup.ag/swap/v1/quote"
+).strip()
 SOL_MINT = "So11111111111111111111111111111111111111112"
 
 _last_alert_time = 0

@@ -196,7 +196,9 @@ async def jupiter_get(url: str, params: Optional[Dict[str, Any]] = None, priorit
     await JUPITER_BUDGET.acquire(priority=priority)
     client = await get_client()
     try:
-        response = await client.get(url, params=params)
+        api_key = os.getenv("JUPITER_API_KEY", "").strip()
+        headers = {"x-api-key": api_key} if api_key else None
+        response = await client.get(url, params=params, headers=headers)
         response.raise_for_status()
         return response.json()
     except Exception as e:

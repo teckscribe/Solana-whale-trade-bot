@@ -1737,4 +1737,44 @@ select.setting-input {
     to { transform: rotate(360deg); }
 }
 
+/* Omni-Channel Discovery Badges */
+.pill-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin: 1px 2px;
+}
+
+.pill-source-gmgn {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--emerald-profit);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.pill-source-dexscreener {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--blue-info);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+}
+
+.pill-source-dex_onchain {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.28);
+}
+
+.pill-source-cluster {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--amber-warning);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.2);
+}
+
+
 

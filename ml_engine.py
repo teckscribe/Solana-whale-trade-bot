@@ -13,6 +13,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import joblib
+from trade_history import load_trade_history
 
 log = logging.getLogger("MLEngine")
 
@@ -43,13 +44,8 @@ def extract_features(df):
 def train_model():
     """Trains the ML model using the historical trade data."""
     log.info("Starting ML model retraining...")
-    if not os.path.exists(JSON_FILE):
-        log.warning(f"No training data found at {JSON_FILE}. Skipping training.")
-        return False
-        
     try:
-        with open(JSON_FILE, 'r') as f:
-            data = json.load(f)
+        data = load_trade_history()
             
         if len(data) < 100:
             log.info(f"Not enough data to train ML model (Need >= 100, got {len(data)}). Skipping.")
@@ -89,8 +85,9 @@ def predict_trade(wallet: str, trade_size_usd: float) -> float:
     Returns the probability as a float between 0.0 and 1.0.
     """
     if not os.path.exists(MODEL_FILE):
-        # If model doesn't exist, we assume 100% confidence to allow trades to happen
-        return 1.0
+        # Enabling the ML gate without a trained model must not silently approve risk.
+        log.error("ML engine is enabled but no trained model exists; rejecting the trade.")
+        return 0.0
         
     try:
         clf = joblib.load(MODEL_FILE)
@@ -122,6 +119,6 @@ def predict_trade(wallet: str, trade_size_usd: float) -> float:
         
     except Exception as e:
         log.error(f"Error making ML prediction: {e}")
-        # Default to allowing the trade on error
-        return 1.0
+        # A broken optional filter should fail closed when the operator enabled it.
+        return 0.0
 
