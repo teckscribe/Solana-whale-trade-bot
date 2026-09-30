@@ -66,6 +66,11 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     level=logging.INFO,
 )
+# python-telegram-bot uses httpx with the bot token embedded in request URLs.
+# Keep transport logs above INFO so credentials never reach journald or pasted
+# service-status output.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("TelegramControlBot")
 
 # Conversation state - tracks what input we are waiting for
