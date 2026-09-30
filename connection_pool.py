@@ -5,6 +5,7 @@ Shared async HTTP connection pool and rate budget system for the WTB Solana trad
 
 import asyncio
 import logging
+import os
 import time
 from typing import Optional, Dict, Any, Callable, Coroutine
 import httpx
@@ -98,6 +99,7 @@ class RateBudget:
 
 
 DEXSCREENER_BUDGET = RateBudget('DexScreener', 300, soft_ceiling_pct=0.85)
+GECKOTERMINAL_BUDGET = RateBudget('GeckoTerminal', 30, soft_ceiling_pct=0.8)
 JUPITER_BUDGET = RateBudget('Jupiter', 600, soft_ceiling_pct=0.8)
 RPC_BUDGET = RateBudget('SolanaRPC', 100, soft_ceiling_pct=0.8)
 JITO_BUDGET = RateBudget('JitoBlockEngine', 120, soft_ceiling_pct=0.85)
@@ -191,6 +193,23 @@ async def dex_get(url: str, params: Optional[Dict[str, Any]] = None, priority: s
         log.error(f"DexScreener GET failed: {e}")
         return None
 
+async def gecko_get(url: str, params: Optional[Dict[str, Any]] = None, priority: str = 'normal') -> Optional[Dict[str, Any]]:
+    """Rate-budgeted GET to GeckoTerminal's public API."""
+    await GECKOTERMINAL_BUDGET.acquire(priority=priority)
+    client = await get_client()
+    try:
+        response = await client.get(
+            url,
+            params=params,
+            headers={"Accept": "application/json;version=20230302"},
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        GECKOTERMINAL_BUDGET.observe_error()
+        log.error(f"GeckoTerminal GET failed: {e}")
+        return None
+
 async def jupiter_get(url: str, params: Optional[Dict[str, Any]] = None, priority: str = 'normal') -> Optional[Dict[str, Any]]:
     """Rate-budgeted GET to Jupiter API."""
     await JUPITER_BUDGET.acquire(priority=priority)
@@ -237,6 +256,7 @@ def get_stats() -> Dict[str, Any]:
     """Return consolidated rate budget stats for dashboard display."""
     return {
         "DexScreener": DEXSCREENER_BUDGET.get_stats(),
+        "GeckoTerminal": GECKOTERMINAL_BUDGET.get_stats(),
         "Jupiter": JUPITER_BUDGET.get_stats(),
         "SolanaRPC": RPC_BUDGET.get_stats(),
         "JitoBlockEngine": JITO_BUDGET.get_stats(),

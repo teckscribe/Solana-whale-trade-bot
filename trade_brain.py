@@ -1191,6 +1191,7 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
     real_net_profit_pct = None
     real_exit_proceeds_usd = None
     fill_data_available = False
+    modeled_entry_cost_usd = float(actual_entry_cost_usd or trade_size)
 
     current_mode = str(TRADE_MODE).upper()
     if _is_live():
@@ -1235,6 +1236,8 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
         net_profit_usd = -trade_size
         exit_price = 0.0
         reason = reason + "_UNSELLABLE"
+        modeled_entry_cost_usd = trade_size
+        real_exit_proceeds_usd = 0.0
     else:
         # Gross move measured entry-fill -> exit-fill, both size-aware and impact-inclusive.
         exit_price = executable_exit_price
@@ -1249,14 +1252,16 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
         # a flat percentage would hide exactly the effect that matters to a small account.
         net_profit_usd = trade_size * ((gross_pct - proportional_pct) / 100) - fixed_cost_usd
         net_profit_pct = (net_profit_usd / trade_size * 100) if trade_size > 0 else 0.0
-        real_exit_proceeds_usd = trade_size + net_profit_usd
+        entry_fee_usd = trade_size * (PAPER_FEE_PCT_PER_LEG / 100.0)
+        exit_fee_usd = trade_size * (PAPER_FEE_PCT_PER_LEG / 100.0)
+        modeled_entry_cost_usd = trade_size + entry_fee_usd + fixed_cost_usd
+        real_exit_proceeds_usd = trade_size * (1.0 + gross_pct / 100.0) - exit_fee_usd
 
         # ── Phantom Take-Profit Defense ───────────────────────────────────────
-        # If DexScreener mid-price or trailing high-water-mark triggered a profit exit,
+        # If DexScreener mid-price triggered a static profit exit,
         # but the real Jupiter executable fill nets a loss (due to illiquidity, spread, or fees),
-        # refuse to sell at a loss under the guise of "TAKE_PROFIT". Keep holding until real
-        # executable profit is possible or downside stop-loss triggers.
-        if reason.startswith(("TAKE_PROFIT", "TRAILING_STOP")) and net_profit_pct < 0.0:
+        # refuse to label it as profit. A trailing stop remains a risk exit and is honored.
+        if reason.startswith("TAKE_PROFIT") and net_profit_pct < 0.0:
             log.warning(
                 f"⚠️ PHANTOM PROFIT REJECTED for {token[:8]}: Triggered by {reason}, "
                 f"but real Jupiter executable quote yields net {net_profit_pct:.2f}% (${net_profit_usd:.2f}) "
@@ -1308,7 +1313,7 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
         "max_profit_percent": round(max_profit, 2),
         "exit_reason": reason,
         "trade_mode": current_mode,
-        "real_entry_cost_usd": round(actual_entry_cost_usd, 4) if actual_entry_cost_usd is not None else None,
+        "real_entry_cost_usd": round(modeled_entry_cost_usd, 4),
         "real_exit_proceeds_usd": round(real_exit_proceeds_usd, 4) if real_exit_proceeds_usd is not None else None,
         "real_net_profit_usd": round(real_net_profit_usd, 4) if real_net_profit_usd is not None else None,
         "real_net_profit_percent": round(real_net_profit_pct, 2) if real_net_profit_pct is not None else None,

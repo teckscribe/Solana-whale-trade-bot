@@ -207,6 +207,34 @@ class TestPhantomProfitDefense(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(recorded_trade["exit_reason"], "TAKE_PROFIT", "Reason must be reclassified from STOP_LOSS to TAKE_PROFIT")
         self.assertGreater(recorded_trade["net_profit_percent"], 20.0)
 
+    @mock.patch("trade_brain.send_exit_alert")
+    @mock.patch("trade_brain.get_sol_price_usd", return_value=150.0)
+    @mock.patch("trade_brain.get_executable_price_usd", return_value=0.00095)
+    async def test_trailing_stop_remains_a_risk_exit_when_net_negative(
+        self, _mock_exec_price, _mock_sol_price, mock_alert
+    ):
+        closed = await trade_brain.close_trade(
+            wallet="Whale1111111111111111111111111111111111111",
+            token="Token1111111111111111111111111111111111111",
+            entry_time=datetime.now(timezone.utc),
+            entry_price=0.0010,
+            exit_price=0.00095,
+            max_profit=10.0,
+            reason="TRAILING_STOP",
+            trade_size=25.0,
+            actual_entry_cost_usd=25.25,
+            tokens_held=25000.0,
+            token_decimals=6,
+        )
+        self.assertTrue(closed)
+        record = mock_alert.call_args[0][0]
+        self.assertLess(record["net_profit_usd"], 0)
+        self.assertAlmostEqual(
+            record["real_exit_proceeds_usd"] - record["real_entry_cost_usd"],
+            record["net_profit_usd"],
+            places=3,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

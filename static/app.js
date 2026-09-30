@@ -139,6 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
     };
 
+    const escapeHtml = (value) => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+
     const copyToClipboard = (text) => {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(() => showToast('Address copied to clipboard!'));
@@ -828,24 +835,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const tags = Array.isArray(w.tags) ? w.tags : [];
             const isWl = !!w.is_whitelisted;
             const passed = w.passed_filters !== false;
+            const safeWallet = escapeHtml(wallet);
+            const walletUrl = encodeURIComponent(wallet);
 
             const tagsHtml = tags.length > 0
-                ? tags.map(t => `<span class="pill-tag">${t}</span>`).join('')
+                ? tags.map(t => `<span class="pill-tag">${escapeHtml(t)}</span>`).join('')
                 : '<span style="color:var(--text-muted); font-size:0.75rem;">--</span>';
 
             const safetyHtml = passed
                 ? '<span class="pill-tag" style="background:rgba(16,185,129,0.12); color:var(--emerald-profit); border:1px solid rgba(16,185,129,0.28); font-weight:600;">✓ Safe Alpha</span>'
-                : `<span class="badge-pnl negative" style="font-size:0.68rem; line-height:1.2; padding:3px 6px; display:inline-block;" title="${(w.rejections || []).join('; ')}">⚠️ Blocked: ${(w.rejections && w.rejections[0]) || 'Toxic'}</span>`;
+                : `<span class="badge-pnl negative" style="font-size:0.68rem; line-height:1.2; padding:3px 6px; display:inline-block;" title="${escapeHtml((w.rejections || []).join('; '))}">⚠️ Blocked: ${escapeHtml((w.rejections && w.rejections[0]) || 'Toxic')}</span>`;
 
             const actionHtml = isWl
                 ? '<span class="badge-whitelisted">⭐ In Whitelist</span>'
                 : (passed
-                    ? `<button class="btn btn-primary btn-add-whale" onclick="window.addWhaleToWhitelist('${wallet}', this, false)">➕ Add</button>`
-                    : `<button class="btn btn-secondary btn-add-whale" style="background:var(--rose-loss); color:#fff; border:none;" onclick="window.addWhaleToWhitelist('${wallet}', this, true)">⚠️ Override</button>`);
+                    ? `<button class="btn btn-primary btn-add-whale" data-wallet="${safeWallet}" onclick="window.addWhaleToWhitelist(this.dataset.wallet, this)">➕ Add</button>`
+                    : '<span class="badge-pnl negative">Blocked</span>');
 
             const sources = Array.isArray(w.discovery_sources) ? w.discovery_sources : ['gmgn'];
             const channelDetails = Array.isArray(w.channel_details) ? w.channel_details : [];
-            const detailsTooltip = channelDetails.length > 0 ? channelDetails.join(' | ') : sources.join(', ');
+            const detailsTooltip = escapeHtml(channelDetails.length > 0 ? channelDetails.join(' | ') : sources.join(', '));
 
             const sourceBadges = sources.map(src => {
                 const s = src.toLowerCase();
@@ -868,21 +877,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     label = 'CONSENSUS';
                     icon = '🎯';
                     cls = 'pill-source-cluster';
+                } else if (s === 'local_history') {
+                    label = 'LOCAL HISTORY';
+                    icon = '🗂';
+                    cls = 'pill-source-local';
                 }
-                return `<span class="pill-source ${cls}" title="${detailsTooltip}">${icon} ${label}</span>`;
+                return `<span class="pill-source ${cls}" title="${detailsTooltip}">${icon} ${escapeHtml(label)}</span>`;
             }).join('');
 
             html += `
                 <tr>
                     <td>
-                        <span class="copy-address" onclick="copyAddress('${wallet}')" title="Copy wallet address">
-                            ${formatShortAddr(wallet)} <span class="copy-btn-mini">📋</span>
+                        <span class="copy-address" data-wallet="${safeWallet}" onclick="copyAddress(this.dataset.wallet)" title="Copy wallet address">
+                            ${escapeHtml(formatShortAddr(wallet))} <span class="copy-btn-mini">📋</span>
                         </span>
                         <div style="display: flex; gap: 4px; margin-top: 4px;">
-                            <a href="https://solscan.io/account/${wallet}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
+                            <a href="https://solscan.io/account/${walletUrl}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
                                 Solscan ↗
                             </a>
-                            <a href="https://gmgn.ai/sol/address/${wallet}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
+                            <a href="https://gmgn.ai/sol/address/${walletUrl}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">
                                 GMGN ↗
                             </a>
                         </div>
@@ -894,7 +907,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td>
                         <div class="badge-ai-score ${scoreClass}">★ ${score}</div>
-                        <div><span class="pill-style">${style}</span></div>
+                        <div><span class="pill-style">${escapeHtml(style)}</span></div>
                     </td>
                     <td>${safetyHtml}</td>
                     <td><span class="badge-pnl ${wr >= 60 ? 'positive' : 'negative'}">${wr.toFixed(1)}%</span></td>
@@ -916,12 +929,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Global Whitelist Add handler
-    window.addWhaleToWhitelist = async function(wallet, btn, force = false) {
+    window.addWhaleToWhitelist = async function(wallet, btn) {
         if (!wallet) return;
-        if (force) {
-            const ok = confirm(`Safety Guardrail Warning: Wallet ${wallet.slice(0,6)}... was flagged by anti-toxicity filters.\n\nAre you sure you want to FORCE whitelist this wallet?`);
-            if (!ok) return;
-        }
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'Adding...';
@@ -930,7 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await apiFetch('/api/whales/whitelist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ wallet: wallet, status: 'WHITELIST', force: force })
+                body: JSON.stringify({ wallet: wallet, status: 'WHITELIST' })
             });
             const data = await res.json();
             if (data.success) {
@@ -957,7 +966,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast(data.detail || 'Failed to add whale to whitelist', 'error');
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = force ? '⚠️ Override' : '➕ Add';
+                    btn.textContent = '➕ Add';
                 }
             }
         } catch (e) {
@@ -965,7 +974,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Security Alert: ' + (e.message || 'Request failed'), 'error');
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = force ? '⚠️ Override' : '➕ Add';
+                btn.textContent = '➕ Add';
             }
         }
     };

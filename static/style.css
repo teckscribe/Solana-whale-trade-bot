@@ -1776,5 +1776,11 @@ select.setting-input {
     box-shadow: 0 0 6px rgba(245, 158, 11, 0.2);
 }
 
+.pill-source-local {
+    background: rgba(100, 116, 139, 0.12);
+    color: #64748b;
+    border-color: rgba(100, 116, 139, 0.28);
+}
+
 
 

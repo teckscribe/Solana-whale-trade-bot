@@ -1,0 +1,346 @@
+{
+  "interpretation": "Descriptive recorded paper outcomes across changing settings and balances; not audited live returns or an out-of-sample backtest.",
+  "period": [
+    "2026-09-18T11:57:18.341921+00:00",
+    "2026-09-25T20:48:02.791278+00:00"
+  ],
+  "summary": {
+    "trades": 159,
+    "wins": 27,
+    "win_rate_pct": 16.98,
+    "recorded_net_pnl_usd": -265.8662,
+    "profit_factor": 0.3883,
+    "mean_trade_return_pct": -5.964,
+    "median_trade_return_pct": -5.52,
+    "mean_trade_size_usd": 59.1966
+  },
+  "modes": {
+    "PAPER": 159
+  },
+  "confirmed_fill_records": 0,
+  "unique_record_keys": 159,
+  "days": {
+    "2026-09-18": {
+      "trades": 13,
+      "wins": 2,
+      "win_rate_pct": 15.38,
+      "recorded_net_pnl_usd": -6.5517,
+      "profit_factor": 0.0949,
+      "mean_trade_return_pct": -13.6408,
+      "median_trade_return_pct": -8.94,
+      "mean_trade_size_usd": 3.4215
+    },
+    "2026-09-19": {
+      "trades": 25,
+      "wins": 5,
+      "win_rate_pct": 20.0,
+      "recorded_net_pnl_usd": -10.5972,
+      "profit_factor": 0.1511,
+      "mean_trade_return_pct": -4.0312,
+      "median_trade_return_pct": -4.84,
+      "mean_trade_size_usd": 11.2036
+    },
+    "2026-09-20": {
+      "trades": 22,
+      "wins": 1,
+      "win_rate_pct": 4.55,
+      "recorded_net_pnl_usd": -28.5745,
+      "profit_factor": 0.0058,
+      "mean_trade_return_pct": -11.2282,
+      "median_trade_return_pct": -7.03,
+      "mean_trade_size_usd": 11.1364
+    },
+    "2026-09-21": {
+      "trades": 41,
+      "wins": 6,
+      "win_rate_pct": 14.63,
+      "recorded_net_pnl_usd": -35.1309,
+      "profit_factor": 0.1386,
+      "mean_trade_return_pct": -6.6354,
+      "median_trade_return_pct": -5.98,
+      "mean_trade_size_usd": 13.7368
+    },
+    "2026-09-22": {
+      "trades": 37,
+      "wins": 4,
+      "win_rate_pct": 10.81,
+      "recorded_net_pnl_usd": -69.4409,
+      "profit_factor": 0.2563,
+      "mean_trade_return_pct": -3.5273,
+      "median_trade_return_pct": -4.52,
+      "mean_trade_size_usd": 66.8
+    },
+    "2026-09-23": {
+      "trades": 15,
+      "wins": 6,
+      "win_rate_pct": 40.0,
+      "recorded_net_pnl_usd": -121.2747,
+      "profit_factor": 0.5166,
+      "mean_trade_return_pct": -2.8353,
+      "median_trade_return_pct": -4.59,
+      "mean_trade_size_usd": 375.734
+    },
+    "2026-09-24": {
+      "trades": 3,
+      "wins": 1,
+      "win_rate_pct": 33.33,
+      "recorded_net_pnl_usd": 4.5401,
+      "profit_factor": 6.352,
+      "mean_trade_return_pct": 6.1133,
+      "median_trade_return_pct": -0.79,
+      "mean_trade_size_usd": 24.9133
+    },
+    "2026-09-25": {
+      "trades": 3,
+      "wins": 2,
+      "win_rate_pct": 66.67,
+      "recorded_net_pnl_usd": 1.1636,
+      "profit_factor": 5.5329,
+      "mean_trade_return_pct": 1.2,
+      "median_trade_return_pct": 1.18,
+      "mean_trade_size_usd": 32.3767
+    }
+  },
+  "exit_reasons": {
+    "STOP_LOSS": {
+      "trades": 54,
+      "wins": 3,
+      "win_rate_pct": 5.56,
+      "recorded_net_pnl_usd": -178.1751,
+      "profit_factor": 0.3497,
+      "mean_trade_return_pct": -8.0341,
+      "median_trade_return_pct": -8.2,
+      "mean_trade_size_usd": 54.6931
+    },
+    "DEAD_VOLUME": {
+      "trades": 23,
+      "wins": 1,
+      "win_rate_pct": 4.35,
+      "recorded_net_pnl_usd": -56.2233,
+      "profit_factor": 0.0718,
+      "mean_trade_return_pct": -6.8787,
+      "median_trade_return_pct": -6.65,
+      "mean_trade_size_usd": 66.027
+    },
+    "TRAILING_STOP_UNSELLABLE": {
+      "trades": 1,
+      "wins": 0,
+      "win_rate_pct": 0.0,
+      "recorded_net_pnl_usd": -3.931,
+      "profit_factor": 0.0,
+      "mean_trade_return_pct": -100.0,
+      "median_trade_return_pct": -100.0,
+      "mean_trade_size_usd": 3.93
+    },
+    "TAKE_PROFIT": {
+      "trades": 39,
+      "wins": 17,
+      "win_rate_pct": 43.59,
+      "recorded_net_pnl_usd": 41.5306,
+      "profit_factor": 2.9283,
+      "mean_trade_return_pct": 0.2928,
+      "median_trade_return_pct": -0.71,
+      "mean_trade_size_usd": 72.559
+    },
+    "WHALE_SOLD": {
+      "trades": 32,
+      "wins": 2,
+      "win_rate_pct": 6.25,
+      "recorded_net_pnl_usd": -57.4715,
+      "profit_factor": 0.0561,
+      "mean_trade_return_pct": -4.7194,
+      "median_trade_return_pct": -4.24,
+      "mean_trade_size_usd": 60.8291
+    },
+    "TRAILING_STOP": {
+      "trades": 8,
+      "wins": 4,
+      "win_rate_pct": 50.0,
+      "recorded_net_pnl_usd": 0.7793,
+      "profit_factor": 1.5861,
+      "mean_trade_return_pct": -1.98,
+      "median_trade_return_pct": -0.085,
+      "mean_trade_size_usd": 14.4375
+    },
+    "STOP_LOSS_UNSELLABLE": {
+      "trades": 1,
+      "wins": 0,
+      "win_rate_pct": 0.0,
+      "recorded_net_pnl_usd": -12.1185,
+      "profit_factor": 0.0,
+      "mean_trade_return_pct": -100.0,
+      "median_trade_return_pct": -100.0,
+      "mean_trade_size_usd": 12.12
+    },
+    "TIMEOUT": {
+      "trades": 1,
+      "wins": 0,
+      "win_rate_pct": 0.0,
+      "recorded_net_pnl_usd": -0.2567,
+      "profit_factor": 0.0,
+      "mean_trade_return_pct": -0.79,
+      "median_trade_return_pct": -0.79,
+      "mean_trade_size_usd": 32.33
+    }
+  },
+  "wallets": {
+    "6FpZdYmBtbXCCAYUpAJ6qE812wz87tcEyRvTUa8U5Nsd": {
+      "trades": 28,
+      "wins": 1,
+      "win_rate_pct": 3.57,
+      "recorded_net_pnl_usd": -62.5369,
+      "profit_factor": 0.0412,
+      "mean_trade_return_pct": -6.7079,
+      "median_trade_return_pct": -6.46,
+      "mean_trade_size_usd": 51.52,
+      "current_whitelist_status": "ABSENT"
+    },
+    "AdKiZFt1EsGTApV7KuuSeqLRJdZwtD79TmQRg9mD1HZJ": {
+      "trades": 18,
+      "wins": 4,
+      "win_rate_pct": 22.22,
+      "recorded_net_pnl_usd": -42.428,
+      "profit_factor": 0.2154,
+      "mean_trade_return_pct": -5.8856,
+      "median_trade_return_pct": -7.6,
+      "mean_trade_size_usd": 52.9144,
+      "current_whitelist_status": "ABSENT"
+    },
+    "8p4FzY2KRwoWzaWCuYuBXgSPDNnjr9gian2hpNwwCTFs": {
+      "trades": 17,
+      "wins": 3,
+      "win_rate_pct": 17.65,
+      "recorded_net_pnl_usd": -36.4874,
+      "profit_factor": 0.7157,
+      "mean_trade_return_pct": -4.5341,
+      "median_trade_return_pct": -4.84,
+      "mean_trade_size_usd": 71.7482,
+      "current_whitelist_status": "ABSENT"
+    },
+    "B9d5N2EKKeXWH9nu5xAnUcKZkXDjure99A35TDCoYCSW": {
+      "trades": 27,
+      "wins": 5,
+      "win_rate_pct": 18.52,
+      "recorded_net_pnl_usd": -37.5064,
+      "profit_factor": 0.2711,
+      "mean_trade_return_pct": -7.3207,
+      "median_trade_return_pct": -4.48,
+      "mean_trade_size_usd": 28.6396,
+      "current_whitelist_status": "ABSENT"
+    },
+    "BumkaFdBaQp4TBCbgtLzMfS7nJALjBfEyyXmGrWZAtzL": {
+      "trades": 3,
+      "wins": 2,
+      "win_rate_pct": 66.67,
+      "recorded_net_pnl_usd": 1.0276,
+      "profit_factor": 3.6168,
+      "mean_trade_return_pct": -2.7533,
+      "median_trade_return_pct": 1.18,
+      "mean_trade_size_usd": 22.6367,
+      "current_whitelist_status": "WHITELIST"
+    },
+    "6kzsXq32zgmW1cEw9xKn9HyfE72oUX9b8PiPBZ8fWn9S": {
+      "trades": 2,
+      "wins": 0,
+      "win_rate_pct": 0.0,
+      "recorded_net_pnl_usd": -1.3008,
+      "profit_factor": 0.0,
+      "mean_trade_return_pct": -6.05,
+      "median_trade_return_pct": -6.05,
+      "mean_trade_size_usd": 11.47,
+      "current_whitelist_status": "ABSENT"
+    },
+    "H44zceMf6tP8cH6NGcKov2nNjGWrtC7a1LEVRNBvcaPf": {
+      "trades": 8,
+      "wins": 1,
+      "win_rate_pct": 12.5,
+      "recorded_net_pnl_usd": -32.4994,
+      "profit_factor": 0.0033,
+      "mean_trade_return_pct": -4.435,
+      "median_trade_return_pct": -3.835,
+      "mean_trade_size_usd": 99.815,
+      "current_whitelist_status": "ABSENT"
+    },
+    "J6ZMH3cXtL2UqrkFb6PKV4R5EMjyzbTArnPTnkjejiNr": {
+      "trades": 6,
+      "wins": 1,
+      "win_rate_pct": 16.67,
+      "recorded_net_pnl_usd": -3.5522,
+      "profit_factor": 0.1709,
+      "mean_trade_return_pct": -4.1583,
+      "median_trade_return_pct": -6.335,
+      "mean_trade_size_usd": 13.9733,
+      "current_whitelist_status": "ABSENT"
+    },
+    "3NRzXAZhkDwiq2aXSKJnY4QZnremVQfwtsMmoh4tYQoJ": {
+      "trades": 3,
+      "wins": 2,
+      "win_rate_pct": 66.67,
+      "recorded_net_pnl_usd": 5.7117,
+      "profit_factor": 23.2505,
+      "mean_trade_return_pct": 8.3367,
+      "median_trade_return_pct": 4.06,
+      "mean_trade_size_usd": 23.8,
+      "current_whitelist_status": "WHITELIST"
+    },
+    "DHv5f18TC5YzWwj6CArjrwGYhnQxu43cRtvHwr7H5XA8": {
+      "trades": 25,
+      "wins": 4,
+      "win_rate_pct": 16.0,
+      "recorded_net_pnl_usd": -33.9906,
+      "profit_factor": 0.1265,
+      "mean_trade_return_pct": -10.7064,
+      "median_trade_return_pct": -7.54,
+      "mean_trade_size_usd": 16.6356,
+      "current_whitelist_status": "ABSENT"
+    },
+    "2X9M7fJ8nX7ogUw4R2mXndWMMqENe456fKgg25CeKkhJ": {
+      "trades": 9,
+      "wins": 2,
+      "win_rate_pct": 22.22,
+      "recorded_net_pnl_usd": 2.5472,
+      "profit_factor": 1.1169,
+      "mean_trade_return_pct": -3.5522,
+      "median_trade_return_pct": -4.58,
+      "mean_trade_size_usd": 167.65,
+      "current_whitelist_status": "ABSENT"
+    },
+    "Awzkv3caFa7qDEK3GFQieR4WDgXcQmNmcigw7CihfYoc": {
+      "trades": 8,
+      "wins": 0,
+      "win_rate_pct": 0.0,
+      "recorded_net_pnl_usd": -16.7601,
+      "profit_factor": 0.0,
+      "mean_trade_return_pct": -2.3963,
+      "median_trade_return_pct": -2.3,
+      "mean_trade_size_usd": 90.4813,
+      "current_whitelist_status": "ABSENT"
+    },
+    "5Dib6bEKkg1C84aD8FbBoyk3k1zZSDtmkU2ypsCE9euY": {
+      "trades": 3,
+      "wins": 2,
+      "win_rate_pct": 66.67,
+      "recorded_net_pnl_usd": -7.2426,
+      "profit_factor": 0.6056,
+      "mean_trade_return_pct": -0.6,
+      "median_trade_return_pct": 0.8,
+      "mean_trade_size_usd": 427.0333,
+      "current_whitelist_status": "ABSENT"
+    },
+    "HEnrSgd4MSMFguBcARMv2FQVQBomT8TLqyYJuR7iBaHW": {
+      "trades": 2,
+      "wins": 0,
+      "win_rate_pct": 0.0,
+      "recorded_net_pnl_usd": -0.8483,
+      "profit_factor": 0.0,
+      "mean_trade_return_pct": -1.7,
+      "median_trade_return_pct": -1.7,
+      "mean_trade_size_usd": 24.975,
+      "current_whitelist_status": "WHITELIST"
+    }
+  },
+  "take_profit_records_with_losses": 22,
+  "cashflow_field_mismatches_over_one_cent": 157,
+  "booked_fixed_costs_usd": 36.5461,
+  "additional_flat_fee_estimate_usd": 188.2452
+}

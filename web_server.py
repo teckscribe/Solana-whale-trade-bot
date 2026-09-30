@@ -37,7 +37,10 @@ from datetime import datetime, timezone
 from jupiter_api import get_sol_price_usd
 import settings_manager
 import whale_manager
-import ai_whale_scorer
+from omni_whale_finder import (
+    ALLOWED_SOURCES,
+    evaluate_wallet_safety,
+)
 
 load_dotenv()
 
@@ -381,15 +384,6 @@ async def get_history(mode: str = "ALL", _: bool = Depends(require_auth)):
         "trades": filtered
     }
 
-# Institutional Safety Filters
-BANNED_WHALE_TAGS = {
-    "mev", "sniper", "banana", "padre", "trojan", "maestro",
-    "photon", "axiom", "bloom", "bullx", "arbitrager", "arbitrageur",
-    "frontrunner", "sandwich", "top_dev", "dev", "token_creator", "deployer"
-}
-MAX_SAFE_7D_TRADES = 200  # High-frequency sniper machine bot threshold
-MIN_SAFE_AI_SCORE = 50   # Minimum acceptable AI gauntlet score
-
 class WhitelistAction(BaseModel):
     wallet: str
     status: str = "WHITELIST"
@@ -468,6 +462,7 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", source: 
     Enforces institutional safety filters:
       - Rejects banned tags (arbitrageur, MEV, sandwich, sniper, bot platforms).
       - Rejects high-frequency sniper bots (> 200 trades/7D).
+      - Requires at least 3 trades, 45% win rate, and positive 7D realized PnL.
       - Rejects AI blacklist status and scores < 50.
       - Default view ('all') ONLY displays verified clean alphas.
       - Supports multi-channel filtering (gmgn, dexscreener, dex_onchain, cluster).
@@ -500,46 +495,26 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", source: 
         profit = float(s7.get("realized", 0.0))
         trades = int(s7.get("trades", 0))
         raw_tags = r.get("tags", [])
-        tags = [str(t).strip().lower() for t in raw_tags]
         native_bal = float(s7.get("native_balance", 0.0))
 
-        data = {
-            "winrate_7d": wr,
-            "trades_7d": trades,
-            "profit_7d": profit,
-            "tags": tags,
-        }
-
-        score_res = ai_whale_scorer.score_wallet(w, data)
+        safety = evaluate_wallet_safety(w, r)
         is_wl = w in wl_set
-
-        # Institutional Toxicity Checks
-        rejections = []
-        found_banned = [t for t in tags if t in BANNED_WHALE_TAGS]
-        if found_banned:
-            rejections.append(f"Banned Tag: {', '.join(found_banned)}")
-        if trades > MAX_SAFE_7D_TRADES:
-            rejections.append(f"Sniper frequency: {trades} trades/7d (limit {MAX_SAFE_7D_TRADES})")
-        if score_res.status == "BLACKLIST":
-            rejections.append(f"AI Blacklist ({', '.join(score_res.red_flags) or 'Toxic pattern'})")
-        elif score_res.score < MIN_SAFE_AI_SCORE:
-            rejections.append(f"Low AI score: {score_res.score} < {MIN_SAFE_AI_SCORE}")
-
-        passed_all_filters = len(rejections) == 0
+        rejections = safety["rejections"]
+        passed_all_filters = safety["passed_filters"]
 
         # Multi-Channel metadata
         raw_sources = r.get("discovery_sources", [])
         if not raw_sources:
-            raw_sources = ["gmgn"]
+            raw_sources = ["local_history"]
         details = r.get("channel_details", [])
 
         item = {
             "wallet": w,
-            "ai_score": score_res.score,
-            "ai_status": score_res.status,
-            "style": score_res.style,
-            "summary": score_res.summary,
-            "red_flags": score_res.red_flags,
+            "ai_score": safety["ai_score"],
+            "ai_status": safety["ai_status"],
+            "style": safety["ai_style"],
+            "summary": safety["ai_summary"],
+            "red_flags": safety["ai_red_flags"],
             "rejections": rejections,
             "passed_filters": passed_all_filters,
             "winrate_7d": wr,
@@ -620,45 +595,37 @@ async def update_whale_whitelist(action: WhitelistAction, _: bool = Depends(requ
     if status not in ["WHITELIST", "NEUTRAL", "BLACKLIST"]:
         raise HTTPException(status_code=400, detail="Status must be WHITELIST, NEUTRAL, or BLACKLIST")
 
-    if len(wallet) < 32 or len(wallet) > 44:
+    if not re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", wallet):
         raise HTTPException(status_code=400, detail="Invalid Solana wallet address format")
 
-    # Safety Guardrail: If attempting to WHITELIST, verify against toxic tags and blacklists
-    if status == "WHITELIST" and not action.force:
+    if status == "WHITELIST":
+        if action.force:
+            raise HTTPException(status_code=400, detail="Safety overrides are disabled")
+
         ranked_path = os.path.join(BASE_DIR, "data", "neutral_whales_ranked.json")
-        if os.path.exists(ranked_path):
-            try:
+        try:
+            matched = None
+            if os.path.exists(ranked_path):
                 with open(ranked_path, "r", encoding="utf-8") as f:
                     ranked = json.load(f)
                 matched = next((r for r in ranked if r.get("wallet") == wallet), None)
-                if matched:
-                    tags = [str(t).lower() for t in matched.get("tags", [])]
-                    s7 = matched.get("7d", {})
-                    trades = int(s7.get("trades", 0))
-                    banned = [t for t in tags if t in BANNED_WHALE_TAGS]
-                    if banned:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. It contains banned toxic tags: {', '.join(banned)} (MEV/Sniper/Arbitrage). Whitelisting blocked."
-                        )
-                    if trades > MAX_SAFE_7D_TRADES:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. Trade frequency ({trades}/7D) exceeds safe limit of {MAX_SAFE_7D_TRADES} (Sniper Bot). Whitelisting blocked."
-                        )
+            if matched is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Wallet has no verified discovery profile and cannot be whitelisted",
+                )
 
-                # Check empirical bot copy-trading performance history
-                copy_perf = ai_whale_scorer._get_copy_performance(wallet)
-                if copy_perf and copy_perf.get("trades", 0) >= 3:
-                    if copy_perf.get("winrate", 0) < 25.0 or copy_perf.get("total_pnl", 0) < -2.0:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. Historical WTB copy trades yielded net losses (WR: {copy_perf['winrate']:.1f}%, PnL: ${copy_perf['total_pnl']:.2f}). Whitelisting blocked."
-                        )
-            except HTTPException:
-                raise
-            except Exception as e:
-                logging.warning(f"Error checking safety for {wallet}: {e}")
+            safety = evaluate_wallet_safety(wallet, matched)
+            if not safety["passed_filters"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. " + "; ".join(safety["rejections"]),
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception(f"Safety evaluation failed for {wallet}")
+            raise HTTPException(status_code=500, detail="Unable to verify wallet safety") from e
 
     ok = whale_manager.set_whale_status(wallet, status)
     if not ok:
@@ -721,6 +688,8 @@ async def run_whale_scan_task(
         res = await omni_whale_finder.run_omni_whale_discovery(
             sources=scanner_state.channels,
             limit_per_source=limit,
+            status_target=status_target,
+            recent_days=recent_days,
             progress_callback=update_progress
         )
 
@@ -754,6 +723,26 @@ async def start_whale_scan(req: Optional[ScanRequest] = None, _: bool = Depends(
     status_target = req.status_target if req and req.status_target else "NEUTRAL"
     recent_days = req.recent_days if req and req.recent_days else 14.0
     sources = req.sources if req and req.sources else ["gmgn", "dexscreener", "dex_onchain", "cluster"]
+
+    if limit < 1 or limit > 50:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 50")
+    if recent_days <= 0 or recent_days > 90:
+        raise HTTPException(status_code=400, detail="recent_days must be between 0 and 90")
+    status_target = status_target.upper()
+    if status_target not in {"NEUTRAL", "WHITELIST", "BLACKLIST"}:
+        raise HTTPException(status_code=400, detail="status_target must be NEUTRAL, WHITELIST, or BLACKLIST")
+    invalid_sources = sorted({str(source).lower() for source in sources} - ALLOWED_SOURCES)
+    if invalid_sources:
+        raise HTTPException(status_code=400, detail=f"Unknown discovery sources: {', '.join(invalid_sources)}")
+    sources = list(dict.fromkeys(str(source).lower() for source in sources))
+
+    # Claim the scanner before scheduling to prevent two near-simultaneous requests
+    # from starting tasks that race on the same ranked output file.
+    scanner_state.is_scanning = True
+    scanner_state.progress = "Discovery task queued..."
+    scanner_state.current = 0
+    scanner_state.total = 100
+    scanner_state.channels = sources
 
     asyncio.create_task(run_whale_scan_task(
         limit=limit,
