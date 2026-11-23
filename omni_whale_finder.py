@@ -64,6 +64,17 @@ ALLOWED_SOURCES = INDEPENDENT_DISCOVERY_SOURCES | {"cluster"}
 SOLANA_ADDRESS_PATTERN = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 
 
+def _gecko_pool_scan_limit() -> int:
+    """Bound keyless GeckoTerminal calls per channel to fit the public quota."""
+    try:
+        return max(
+            1,
+            min(int(os.getenv("GECKOTERMINAL_MAX_POOLS_PER_CHANNEL", "5") or 5), 10),
+        )
+    except ValueError:
+        return 5
+
+
 class DiscoverySource(str, Enum):
     GMGN = "gmgn"
     DEXSCREENER = "dexscreener"
@@ -299,7 +310,7 @@ async def fetch_dexscreener_breakout_whales(limit: int = 20) -> List[Dict[str, A
         log.info(f"[Channel 2 - DexScreener] Extracted {len(sol_tokens)} promoted candidate token mints.")
 
         # 2. Inspect active pools for the top tokens
-        for mint in sol_tokens[:8]:
+        for mint in sol_tokens[:_gecko_pool_scan_limit()]:
             try:
                 pair_data = await connection_pool.dex_get(
                     f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
@@ -385,7 +396,7 @@ async def fetch_onchain_dex_whales(limit: int = 20) -> List[Dict[str, Any]]:
         pools = (pool_data or {}).get("data", [])
         log.info(f"[Channel 3 - DEX On-Chain] Found {len(pools)} trending pools on Solana.")
 
-        for pool in pools[:10]:
+        for pool in pools[:_gecko_pool_scan_limit()]:
             pool_addr = pool.get("attributes", {}).get("address")
             pool_name = pool.get("attributes", {}).get("name", "Unknown")
             token_mint = _relationship_address(pool, "base_token")

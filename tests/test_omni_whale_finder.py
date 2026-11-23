@@ -205,12 +205,14 @@ def test_gecko_get_retries_provider_throttle():
         client.get = AsyncMock(side_effect=[throttled, success])
         with patch("connection_pool.get_client", new_callable=AsyncMock, return_value=client), \
              patch.object(connection_pool.GECKOTERMINAL_BUDGET, "acquire", new_callable=AsyncMock), \
+             patch.object(connection_pool.GECKOTERMINAL_BUDGET, "pause_for") as pause, \
              patch("connection_pool.asyncio.sleep", new_callable=AsyncMock) as sleep:
             result = await connection_pool.gecko_get("https://api.geckoterminal.com/api/v2/test")
 
         assert result == {"data": ["ok"]}
         assert client.get.await_count == 2
-        sleep.assert_awaited_once_with(1.0)
+        pause.assert_called_once_with(15.0)
+        sleep.assert_awaited_once_with(15.0)
 
     asyncio.run(_run())
 

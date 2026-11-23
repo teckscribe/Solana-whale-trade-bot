@@ -394,7 +394,7 @@ class RateBudget:
 - **`acquire(priority='high')`**: Sell and stop-loss execution calls access 100% of hard limit.
 
 ### 12.3 Managed Budgets & Persistent Clients
-- **Budgets**: `jupiter` (600 RPM), `dexscreener` (300 RPM), `rpc` (100 RPM), `nansen` (60 RPM), and keyless GeckoTerminal (8 paced calls/minute with serialized access and bounded 429 retry).
+- **Budgets**: `jupiter` (600 RPM), `dexscreener` (300 RPM), `rpc` (100 RPM), `nansen` (60 RPM), and keyless GeckoTerminal (about 5–6 paced calls/minute, five pools/channel, serialized access, and global 429 cooldown).
 - **Session Pooling**: Manages a shared `httpx.AsyncClient` with `limits=httpx.Limits(max_keepalive_connections=50, max_connections=100)`.
 
 ---

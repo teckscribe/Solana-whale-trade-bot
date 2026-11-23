@@ -42,6 +42,7 @@ class RateBudget:
         self._window_start = time.time()
         self._count = 0
         self._last_acquired = 0.0
+        self._blocked_until = 0.0
         self._lock = asyncio.Lock()
         
         # Stats tracking
@@ -70,20 +71,22 @@ class RateBudget:
             now = time.time()
             async with self._lock:
                 self._reset_window_if_needed(now)
-                
+                blocked_wait = self._blocked_until - now
                 interval_wait = self._min_interval - (now - self._last_acquired)
-                if self._count < ceiling and interval_wait <= 0:
+                if blocked_wait <= 0 and self._count < ceiling and interval_wait <= 0:
                     self._count += 1
                     self._last_acquired = now
                     self._stats["total_requests"] += 1
                     return
 
-                if self._count >= ceiling:
+                if blocked_wait > 0:
+                    wait_time = blocked_wait
+                elif self._count >= ceiling:
                     wait_time = 60.0 - (now - self._window_start) + 0.1
                 else:
                     wait_time = interval_wait
                 
-                if self._count >= ceiling and not warned:
+                if blocked_wait <= 0 and self._count >= ceiling and not warned:
                     log.warning(f"[{self._name}] Rate limit approaching ({self._count}/{ceiling}). Throttling for {wait_time:.2f}s.")
                     self._stats["throttle_events"] += 1
                     warned = True
@@ -104,6 +107,10 @@ class RateBudget:
         """Record a provider-side throttle response."""
         self._stats["throttle_events"] += 1
 
+    def pause_for(self, seconds: float):
+        """Apply a provider-directed cooldown to all callers sharing this budget."""
+        self._blocked_until = max(self._blocked_until, time.time() + max(0.0, seconds))
+
     def get_stats(self) -> Dict[str, Any]:
         """Return statistics for the budget."""
         return {
@@ -120,9 +127,9 @@ DEXSCREENER_BUDGET = RateBudget('DexScreener', 300, soft_ceiling_pct=0.85)
 # fluctuate with global traffic. Pace calls rather than permitting an initial burst.
 GECKOTERMINAL_BUDGET = RateBudget(
     'GeckoTerminal',
-    10,
-    soft_ceiling_pct=0.8,
-    min_interval_seconds=7.5,
+    6,
+    soft_ceiling_pct=1.0,
+    min_interval_seconds=10.5,
 )
 NANSEN_BUDGET = RateBudget('Nansen', 60, soft_ceiling_pct=0.8)
 JUPITER_BUDGET = RateBudget('Jupiter', 600, soft_ceiling_pct=0.8)
@@ -237,21 +244,28 @@ async def gecko_get(url: str, params: Optional[Dict[str, Any]] = None, priority:
                 GECKOTERMINAL_BUDGET.observe_throttle()
                 retry_header = response.headers.get("Retry-After", "").strip()
                 try:
-                    retry_after = float(retry_header)
+                    provider_retry_after = float(retry_header)
                 except (TypeError, ValueError):
-                    retry_after = min(60.0, 10.0 * (2 ** attempt))
-                retry_after = max(1.0, min(retry_after, 120.0))
-                log.warning(
-                    "GeckoTerminal throttled request (attempt %s/%s); retrying in %.1fs.",
-                    attempt + 1,
-                    max_attempts,
-                    retry_after,
-                )
+                    provider_retry_after = 0.0
+                retry_after = max(provider_retry_after, 15.0 * (2 ** attempt))
+                retry_after = min(retry_after, 120.0)
+                GECKOTERMINAL_BUDGET.pause_for(retry_after)
                 if attempt + 1 < max_attempts:
+                    log.warning(
+                        "GeckoTerminal throttled request (attempt %s/%s); pausing all Gecko calls for %.1fs.",
+                        attempt + 1,
+                        max_attempts,
+                        retry_after,
+                    )
                     await asyncio.sleep(retry_after)
                     continue
                 GECKOTERMINAL_BUDGET.observe_error()
-                log.error("GeckoTerminal GET failed after %s throttled attempts: %s", max_attempts, url)
+                log.error(
+                    "GeckoTerminal GET failed after %s throttled attempts; global cooldown %.1fs: %s",
+                    max_attempts,
+                    retry_after,
+                    url,
+                )
                 return None
 
             response.raise_for_status()
