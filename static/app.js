@@ -873,6 +873,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     label = 'DEX POOLS';
                     icon = '🌊';
                     cls = 'pill-source-dex_onchain';
+                } else if (s === 'nansen') {
+                    label = 'NANSEN';
+                    icon = '🧠';
+                    cls = 'pill-source-gmgn';
                 } else if (s === 'cluster') {
                     label = 'CONSENSUS';
                     icon = '🎯';
@@ -1015,9 +1019,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const sourceVal = neutralWhaleSource ? neutralWhaleSource.value : 'all';
         const sources = (sourceVal && sourceVal !== 'all')
             ? [sourceVal]
-            : ['gmgn', 'dexscreener', 'dex_onchain', 'cluster'];
+            : ['gmgn', 'dexscreener', 'dex_onchain', 'nansen', 'cluster'];
 
-        showToast('Initiating 4-channel alpha whale discovery scan...', 'info');
+        showToast('Initiating 5-channel alpha whale discovery scan...', 'info');
 
         try {
             const res = await apiFetch('/api/whales/scan', {
@@ -1049,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             btn.disabled = false;
                             btn.innerHTML = btn.id === 'scan-whales-btn'
                                 ? '<span class="btn-icon">⚡</span> Scan Whitelist Candidates'
-                                : '<span>⚡ Scan All 4 Channels</span>';
+                                : '<span>⚡ Scan All 5 Channels</span>';
                         });
 
                         showToast(stData.progress || 'Whale discovery scan completed!', 'success');
@@ -1070,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.disabled = false;
                 btn.innerHTML = btn.id === 'scan-whales-btn'
                     ? '<span class="btn-icon">⚡</span> Scan Whitelist Candidates'
-                    : '<span>⚡ Scan All 4 Channels</span>';
+                    : '<span>⚡ Scan All 5 Channels</span>';
             });
         }
     }

@@ -1,7 +1,7 @@
 """
 tests/test_omni_whale_finder.py
 =============================================================================
-Unit and integration tests for the 4-channel Omni-Whale Discovery engine
+Unit and integration tests for the 5-channel Omni-Whale Discovery engine
 and web endpoints.
 =============================================================================
 """
@@ -25,6 +25,7 @@ from omni_whale_finder import (
     BANNED_WHALE_TAGS,
     MAX_SAFE_7D_TRADES,
     MIN_SAFE_AI_SCORE,
+    evaluate_discovery_consensus,
     evaluate_wallet_safety,
 )
 
@@ -105,6 +106,51 @@ def test_safety_policy_requires_every_mandatory_gate():
         result = evaluate_wallet_safety(wallet, clean_profile)
     assert result["passed_filters"] is False
     assert "toxic_copy_history" in result["ai_red_flags"]
+
+
+def test_discovery_consensus_requires_two_independent_sources():
+    one_source = evaluate_discovery_consensus({
+        "discovery_sources": ["gmgn", "cluster", "local_history"],
+    })
+    assert one_source["source_consensus_passed"] is False
+    assert one_source["independent_source_count"] == 1
+
+    corroborated = evaluate_discovery_consensus({
+        "discovery_sources": ["gmgn", "nansen", "cluster"],
+    })
+    assert corroborated["source_consensus_passed"] is True
+    assert corroborated["independent_sources"] == ["gmgn", "nansen"]
+
+
+def test_nansen_channel_parses_unique_solana_traders():
+    async def _run():
+        wallet = "7" * 44
+        payload = {
+            "data": [{
+                "trader_address": wallet,
+                "trader_address_label": "30D Smart Trader",
+                "token_bought_address": "8" * 44,
+                "token_bought_symbol": "ALPHA",
+                "trade_value_usd": 2500,
+                "block_timestamp": "2026-11-23T10:00:00Z",
+                "transaction_hash": "tx-1",
+            }, {
+                "trader_address": wallet,
+                "trade_value_usd": 1000,
+            }],
+        }
+        with patch.dict(os.environ, {"NANSEN_API_KEY": "test-key", "NANSEN_DISCOVERY_ENABLED": "TRUE"}), \
+             patch("connection_pool.nansen_post", new_callable=AsyncMock, return_value=payload) as post:
+            found = await omni_whale_finder.fetch_nansen_smart_money(limit=10)
+
+        assert len(found) == 1
+        assert found[0]["wallet"] == wallet
+        assert found[0]["source"] == "nansen"
+        request = post.await_args.kwargs["json_data"]
+        assert request["chains"] == ["solana"]
+        assert request["filters"]["trade_value_usd"]["min"] == 1000.0
+
+    asyncio.run(_run())
 
 
 def test_cluster_consensus_requires_shared_time_window():
@@ -225,13 +271,13 @@ def test_web_endpoints_omni_channels(tmp_path):
             "wallet": "WalletA1111111111111111111111111111111111",
             "7d": {"winrate": 75.0, "trades": 20, "realized": 800.0},
             "tags": ["smart_money"],
-            "discovery_sources": ["gmgn"]
+            "discovery_sources": ["gmgn", "nansen"]
         },
         {
             "wallet": "WalletB2222222222222222222222222222222222",
             "7d": {"winrate": 80.0, "trades": 15, "realized": 1200.0},
             "tags": ["runner"],
-            "discovery_sources": ["dexscreener", "cluster"]
+            "discovery_sources": ["dexscreener", "nansen", "cluster"]
         }
     ]
 
@@ -306,6 +352,17 @@ def test_whitelist_endpoint_cannot_override_safety(tmp_path):
         assert forced.status_code == 400
         set_status.assert_not_called()
 
+        uncorroborated = client.post("/api/whales/whitelist", json={
+            "wallet": wallet,
+            "status": "WHITELIST",
+        })
+        assert uncorroborated.status_code == 400
+        set_status.assert_not_called()
+
+        ranked[0]["discovery_sources"] = ["gmgn", "nansen"]
+        (tmp_path / "data" / "neutral_whales_ranked.json").write_text(
+            json.dumps(ranked), encoding="utf-8"
+        )
         accepted = client.post("/api/whales/whitelist", json={
             "wallet": wallet,
             "status": "WHITELIST",

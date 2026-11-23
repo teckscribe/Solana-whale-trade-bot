@@ -341,6 +341,7 @@ Whales that stop trading or lose profitability are automatically pruned:
   BANNED_TAGS = {'arbitrager', 'top_dev', 'sniper', 'smart_degen', 'kol', 'pump_dump'}
   ```
   Wallets passing the filter are queued and sent via Telegram for user approval.
+- **`omni_whale_finder.py`**: Merges GMGN, DexScreener, DEX pool, optional Nansen Smart Money, and derived cluster observations. A wallet is whitelist-eligible only when it passes the performance/toxicity policy and is independently observed by at least two external feeds; cluster and local-history evidence do not count as independent corroboration.
 
 ### 10.4 AI Whale Scoring & Vetting Engine (`ai_whale_scorer.py`)
 Adapted from `fomo-robinhood-radar`'s `pipeline/score.py`:
@@ -570,8 +571,9 @@ journalctl -u wtb-bot -f
 #### Updating Codebase
 ```bash
 cd ~/ubuntu/program_files/wtb
-git checkout -- whitelist.json   # Discard local runtime activity timestamps
-git pull origin main             # Pull verified release
+git stash push -m "server-runtime-before-update" -- whitelist.json data/settings.json
+git pull --ff-only origin main
+git stash pop                    # Restore server whitelist and PAPER settings
 sudo systemctl restart wtb wtb-web wtb-bot
 ```
 

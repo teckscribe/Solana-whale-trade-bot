@@ -100,6 +100,7 @@ class RateBudget:
 
 DEXSCREENER_BUDGET = RateBudget('DexScreener', 300, soft_ceiling_pct=0.85)
 GECKOTERMINAL_BUDGET = RateBudget('GeckoTerminal', 30, soft_ceiling_pct=0.8)
+NANSEN_BUDGET = RateBudget('Nansen', 60, soft_ceiling_pct=0.8)
 JUPITER_BUDGET = RateBudget('Jupiter', 600, soft_ceiling_pct=0.8)
 RPC_BUDGET = RateBudget('SolanaRPC', 100, soft_ceiling_pct=0.8)
 JITO_BUDGET = RateBudget('JitoBlockEngine', 120, soft_ceiling_pct=0.85)
@@ -225,6 +226,32 @@ async def jupiter_get(url: str, params: Optional[Dict[str, Any]] = None, priorit
         log.error(f"Jupiter GET failed: {e}")
         return None
 
+async def nansen_post(url: str, json_data: Dict[str, Any], priority: str = 'normal') -> Optional[Dict[str, Any]]:
+    """Rate-budgeted POST to Nansen API; disabled when no API key is configured."""
+    api_key = os.getenv("NANSEN_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    await NANSEN_BUDGET.acquire(priority=priority)
+    client = await get_client()
+    try:
+        response = await client.post(
+            url,
+            json=json_data,
+            headers={
+                "apikey": api_key,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=20.0,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        NANSEN_BUDGET.observe_error()
+        log.error(f"Nansen POST failed: {e}")
+        return None
+
 async def jito_post(url: str, json_data: Dict[str, Any], priority: str = 'high') -> Optional[Dict[str, Any]]:
     """Rate-budgeted POST to Jito Block Engine."""
     await JITO_BUDGET.acquire(priority=priority)
@@ -257,6 +284,7 @@ def get_stats() -> Dict[str, Any]:
     return {
         "DexScreener": DEXSCREENER_BUDGET.get_stats(),
         "GeckoTerminal": GECKOTERMINAL_BUDGET.get_stats(),
+        "Nansen": NANSEN_BUDGET.get_stats(),
         "Jupiter": JUPITER_BUDGET.get_stats(),
         "SolanaRPC": RPC_BUDGET.get_stats(),
         "JitoBlockEngine": JITO_BUDGET.get_stats(),

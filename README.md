@@ -69,7 +69,7 @@ The **TRAM (True RAM)** architecture eliminates all disk I/O from the trade path
 ## 🌟 Core Features
 
 - **Real-Time On-Chain Whale Tracking**: Subscribes to Solana transaction streams via WebSocket (Helius, Alchemy, QuickNode) and parses swap operations across Raydium (AMM v4, CLMM, CPMM), Orca (Whirlpool), Pump.fun, and Jupiter DEX.
-- **Automated Whale Discovery (GMGN.ai)**: In addition to tracking whitelisted addresses, the bot automatically discovers and ranks top-performing smart money wallets with high win rates and 7-day PnL.
+- **Five-Channel Whale Discovery**: GMGN, DexScreener, DEX on-chain pools, optional Nansen Smart Money, and derived cluster evidence feed a shared ranking pipeline. Whitelist additions require both the performance/toxicity gates and corroboration by at least two independent feeds.
 - **Dual Trading Engine**:
   - **Paper Mode**: Simulates real Solana market conditions including dynamic Raydium/Jupiter pool fees, network gas, ATA (Associated Token Account) rent creation/reclamation, and slippage.
   - **Live Mode**: Submits real on-chain swap transactions via Jupiter Swap API v6 and GMGN priority routing.
@@ -104,6 +104,7 @@ The **TRAM (True RAM)** architecture eliminates all disk I/O from the trade path
 ├── main.py                  # Bot entry point, startup pre-warming & lifecycle manager
 ├── ml_engine.py             # Machine learning trade validation model
 ├── momentum_filter.py       # Pre-trade momentum & volume spike filters
+├── omni_whale_finder.py     # Five-channel discovery & source-consensus gate
 ├── requirements.txt         # Project dependencies
 ├── scanner.py               # Token scanner & security checks
 ├── settings_manager.py      # Hot-reloadable settings engine with audit history
@@ -129,6 +130,7 @@ The **TRAM (True RAM)** architecture eliminates all disk I/O from the trade path
 - A **Solana RPC and WSS endpoint** (from [Helius](https://helius.dev/), [Alchemy](https://www.alchemy.com/), or [QuickNode](https://www.quicknode.com/))
 - A **Telegram Bot Token** (from [@BotFather](https://t.me/BotFather))
 - *(Optional)* A **GMGN API Key** for enhanced smart-money discovery
+- *(Optional)* A **Nansen API Key** for labeled Smart Money DEX trades
 
 ### 2. Clone the Repository
 ```bash

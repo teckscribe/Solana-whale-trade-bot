@@ -39,6 +39,7 @@ import settings_manager
 import whale_manager
 from omni_whale_finder import (
     ALLOWED_SOURCES,
+    evaluate_discovery_consensus,
     evaluate_wallet_safety,
 )
 
@@ -465,7 +466,8 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", source: 
       - Requires at least 3 trades, 45% win rate, and positive 7D realized PnL.
       - Rejects AI blacklist status and scores < 50.
       - Default view ('all') ONLY displays verified clean alphas.
-      - Supports multi-channel filtering (gmgn, dexscreener, dex_onchain, cluster).
+      - Requires two independent discovery sources for whitelist eligibility.
+      - Supports filtering by GMGN, DexScreener, DEX on-chain, Nansen, and cluster.
     """
     ranked_path = os.path.join(BASE_DIR, "data", "neutral_whales_ranked.json")
     ranked = []
@@ -498,9 +500,14 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", source: 
         native_bal = float(s7.get("native_balance", 0.0))
 
         safety = evaluate_wallet_safety(w, r)
+        consensus = evaluate_discovery_consensus(r)
         is_wl = w in wl_set
-        rejections = safety["rejections"]
-        passed_all_filters = safety["passed_filters"]
+        rejections = list(safety["rejections"])
+        if consensus["source_consensus_rejection"]:
+            rejections.append(consensus["source_consensus_rejection"])
+        passed_all_filters = bool(
+            safety["passed_filters"] and consensus["source_consensus_passed"]
+        )
 
         # Multi-Channel metadata
         raw_sources = r.get("discovery_sources", [])
@@ -517,6 +524,10 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", source: 
             "red_flags": safety["ai_red_flags"],
             "rejections": rejections,
             "passed_filters": passed_all_filters,
+            "safety_filters_passed": safety["passed_filters"],
+            "source_consensus_passed": consensus["source_consensus_passed"],
+            "independent_source_count": consensus["independent_source_count"],
+            "independent_sources": consensus["independent_sources"],
             "winrate_7d": wr,
             "profit_7d": profit,
             "trades_7d": trades,
@@ -621,6 +632,13 @@ async def update_whale_whitelist(action: WhitelistAction, _: bool = Depends(requ
                     status_code=400,
                     detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. " + "; ".join(safety["rejections"]),
                 )
+            consensus = evaluate_discovery_consensus(matched)
+            if not consensus["source_consensus_passed"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Security Alert: Cannot whitelist wallet {wallet[:8]}. "
+                    + consensus["source_consensus_rejection"],
+                )
         except HTTPException:
             raise
         except Exception as e:
@@ -670,12 +688,12 @@ async def run_whale_scan_task(
 ):
     global scanner_state
     scanner_state.is_scanning = True
-    scanner_state.progress = "Initiating 4-channel discovery engine..."
+    scanner_state.progress = "Initiating 5-channel discovery engine..."
     scanner_state.current = 0
     scanner_state.total = 100
     scanner_state.discovered_count = 0
     scanner_state.error = ""
-    scanner_state.channels = sources or ["gmgn", "dexscreener", "dex_onchain", "cluster"]
+    scanner_state.channels = sources or ["gmgn", "dexscreener", "dex_onchain", "nansen", "cluster"]
 
     try:
         import omni_whale_finder
@@ -722,7 +740,7 @@ async def start_whale_scan(req: Optional[ScanRequest] = None, _: bool = Depends(
     limit = req.limit if req and req.limit else 15
     status_target = req.status_target if req and req.status_target else "NEUTRAL"
     recent_days = req.recent_days if req and req.recent_days else 14.0
-    sources = req.sources if req and req.sources else ["gmgn", "dexscreener", "dex_onchain", "cluster"]
+    sources = req.sources if req and req.sources else ["gmgn", "dexscreener", "dex_onchain", "nansen", "cluster"]
 
     if limit < 1 or limit > 50:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 50")

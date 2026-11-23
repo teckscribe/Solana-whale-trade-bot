@@ -2,11 +2,12 @@
 omni_whale_finder.py
 =============================================================================
 Omni-Channel Whale Discovery Engine for Solana Copy-Trading.
-Aggregates smart money alpha from 4 institutional discovery channels:
+Aggregates smart money alpha from 5 institutional discovery channels:
   1. GMGN Smart Money Stream: Real-time on-chain makers via GMGN API/CLI.
   2. DexScreener Breakout Runners: High-volume accumulators on trending tokens.
   3. DEX On-Chain Leaderboards: Large net buyers on Raydium/Orca/Meteora pools.
-  4. Multi-Whale Cluster Consensus: Cross-wallet token convergence & synergy.
+  4. Nansen Smart Money DEX Trades: Labeled Solana smart-trader activity.
+  5. Multi-Whale Cluster Consensus: Cross-wallet token convergence & synergy.
 
 Every candidate is filtered through the institutional anti-toxicity gauntlet:
   - Banned tags (mev, sniper, arbitrager, trojan, axiom, dev/deployer).
@@ -16,6 +17,7 @@ Every candidate is filtered through the institutional anti-toxicity gauntlet:
 """
 
 import os
+import re
 import sys
 import json
 import time
@@ -56,7 +58,10 @@ MIN_SAFE_7D_WINRATE = 45.0
 MIN_REPEAT_BUYS = 2
 MIN_ACCUMULATION_SPAN_SECONDS = 30.0
 CLUSTER_WINDOW_SECONDS = 60 * 60
-ALLOWED_SOURCES = {"gmgn", "dexscreener", "dex_onchain", "cluster"}
+MIN_INDEPENDENT_DISCOVERY_SOURCES = 2
+INDEPENDENT_DISCOVERY_SOURCES = {"gmgn", "dexscreener", "dex_onchain", "nansen"}
+ALLOWED_SOURCES = INDEPENDENT_DISCOVERY_SOURCES | {"cluster"}
+SOLANA_ADDRESS_PATTERN = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 
 
 class DiscoverySource(str, Enum):
@@ -64,6 +69,7 @@ class DiscoverySource(str, Enum):
     DEXSCREENER = "dexscreener"
     DEX_ONCHAIN = "dex_onchain"
     CLUSTER = "cluster"
+    NANSEN = "nansen"
     LOCAL_HISTORY = "local_history"
 
 
@@ -137,6 +143,30 @@ def evaluate_wallet_safety(wallet: str, profile: Dict[str, Any]) -> Dict[str, An
         "ai_style": score.style,
         "ai_summary": score.summary,
         "ai_red_flags": score.red_flags,
+    }
+
+
+def evaluate_discovery_consensus(profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Require corroboration by distinct external discovery feeds."""
+    raw_sources = profile.get("discovery_sources", []) or []
+    independent_sources = sorted({
+        str(source).strip().lower()
+        for source in raw_sources
+        if str(source).strip().lower() in INDEPENDENT_DISCOVERY_SOURCES
+    })
+    source_count = len(independent_sources)
+    passed = source_count >= MIN_INDEPENDENT_DISCOVERY_SOURCES
+    rejection = ""
+    if not passed:
+        rejection = (
+            f"Discovery consensus requires {MIN_INDEPENDENT_DISCOVERY_SOURCES} independent sources; "
+            f"found {source_count}"
+        )
+    return {
+        "source_consensus_passed": passed,
+        "independent_source_count": source_count,
+        "independent_sources": independent_sources,
+        "source_consensus_rejection": rejection,
     }
 
 
@@ -427,18 +457,88 @@ async def fetch_onchain_dex_whales(limit: int = 20) -> List[Dict[str, Any]]:
     return candidates
 
 
-# ─── CHANNEL 4: Multi-Whale Cluster Consensus (Cielo-Style) ───────────────────
+# ─── CHANNEL 4: Nansen Smart Money DEX Trades ────────────────────────────────
+
+async def fetch_nansen_smart_money(limit: int = 20) -> List[Dict[str, Any]]:
+    """Fetch labeled Solana smart traders observed by Nansen in the last 24 hours."""
+    if os.getenv("NANSEN_DISCOVERY_ENABLED", "TRUE").strip().upper() not in {"1", "TRUE", "YES", "ON"}:
+        log.info("[Channel 4 - Nansen] Discovery is disabled by configuration.")
+        return []
+    if not os.getenv("NANSEN_API_KEY", "").strip():
+        log.info("[Channel 4 - Nansen] NANSEN_API_KEY missing; skipping premium channel.")
+        return []
+
+    labels = [
+        label.strip()
+        for label in os.getenv(
+            "NANSEN_SMART_MONEY_LABELS",
+            "Smart Trader,30D Smart Trader,90D Smart Trader,180D Smart Trader",
+        ).split(",")
+        if label.strip()
+    ]
+    try:
+        min_trade_usd = max(0.0, float(os.getenv("NANSEN_MIN_TRADE_USD", "1000") or 1000))
+    except ValueError:
+        min_trade_usd = 1000.0
+
+    request_limit = max(1, min(int(limit), 50))
+    payload = {
+        "chains": ["solana"],
+        "filters": {
+            "include_smart_money_labels": labels,
+            "trade_value_usd": {"min": min_trade_usd},
+        },
+        "pagination": {"page": 1, "per_page": min(max(request_limit * 5, 50), 1000)},
+        "order_by": [{"field": "block_timestamp", "direction": "DESC"}],
+    }
+    response = await connection_pool.nansen_post(
+        "https://api.nansen.ai/api/v1/smart-money/dex-trades",
+        json_data=payload,
+    )
+    rows = response.get("data", []) if isinstance(response, dict) else []
+    if isinstance(rows, dict):
+        rows = rows.get("data", []) or rows.get("items", []) or []
+
+    candidates: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
+    for row in rows if isinstance(rows, list) else []:
+        wallet = str(row.get("trader_address", "")).strip()
+        if not SOLANA_ADDRESS_PATTERN.fullmatch(wallet) or wallet in seen:
+            continue
+        seen.add(wallet)
+        label = str(row.get("trader_address_label", "Smart Money")).strip() or "Smart Money"
+        try:
+            trade_value = float(row.get("trade_value_usd", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            trade_value = 0.0
+        candidates.append({
+            "wallet": wallet,
+            "source": DiscoverySource.NANSEN.value,
+            "token": row.get("token_bought_address", ""),
+            "token_symbol": row.get("token_bought_symbol", ""),
+            "detail": f"Nansen {label} DEX buy (${trade_value:,.0f})",
+            "observed_at": _parse_timestamp(row.get("block_timestamp")) or time.time(),
+            "transaction_hash": row.get("transaction_hash", ""),
+        })
+        if len(candidates) >= request_limit:
+            break
+
+    log.info(f"[Channel 4 - Nansen] Discovered {len(candidates)} labeled smart traders.")
+    return candidates
+
+
+# ─── CHANNEL 5: Multi-Whale Cluster Consensus (Cielo-Style) ───────────────────
 
 def detect_cluster_consensus(
     candidates_pool: List[Dict[str, Any]],
     known_whitelist: Set[str]
 ) -> List[Dict[str, Any]]:
     """
-    Channel 4: Identifies same-token and same-wallet observations from distinct
+    Channel 5: Identifies same-token and same-wallet observations from distinct
     inputs inside a bounded time window. Known whitelist participation is recorded
     as supporting evidence when a whitelisted wallet appears in the same cluster.
     """
-    log.info("[Channel 4 - Cluster Consensus] Evaluating token convergence across discovery candidates...")
+    log.info("[Channel 5 - Cluster Consensus] Evaluating token convergence across discovery candidates...")
 
     token_observations: Dict[str, List[Tuple[str, float]]] = {}
     wallet_sources: Dict[str, Dict[str, float]] = {}
@@ -508,7 +608,7 @@ def detect_cluster_consensus(
                 "observed_at": max(timestamps),
             })
 
-    log.info(f"[Channel 4 - Cluster Consensus] Identified {len(cluster_candidates)} consensus cluster candidates.")
+    log.info(f"[Channel 5 - Cluster Consensus] Identified {len(cluster_candidates)} consensus cluster candidates.")
     return cluster_candidates
 
 
@@ -522,22 +622,22 @@ async def run_omni_whale_discovery(
     progress_callback = None
 ) -> Dict[str, Any]:
     """
-    Executes the 4-channel discovery pipeline:
-      1. Gathers candidate pools from selected channels (GMGN, DexScreener, DEX Pools, Cluster).
+    Executes the 5-channel discovery pipeline:
+      1. Gathers candidates from GMGN, DexScreener, DEX pools, Nansen, and Cluster.
       2. Merges and de-duplicates candidate wallets.
       3. Pulls full 7D/30D GMGN performance stats for each wallet.
       4. Enforces the strict institutional anti-toxicity gauntlet.
       5. Saves and ranks new clean alphas into data/neutral_whales_ranked.json.
     """
     if sources is None:
-        sources = ["gmgn", "dexscreener", "dex_onchain", "cluster"]
+        sources = ["gmgn", "dexscreener", "dex_onchain", "nansen", "cluster"]
 
     active_sources = list(dict.fromkeys(s.lower() for s in sources if s.lower() in ALLOWED_SOURCES))
     limit_per_source = max(1, min(int(limit_per_source), 50))
     log.info(f"🚀 Starting Omni-Channel Whale Discovery across channels: {active_sources}")
 
     if progress_callback:
-        progress_callback("Connecting to 4 discovery channels (GMGN, DexScreener, DEX Pools, Cluster)...", 0, 100)
+        progress_callback("Connecting to 5 discovery channels (GMGN, DexScreener, DEX Pools, Nansen, Cluster)...", 0, 100)
 
     raw_candidates: List[Dict[str, Any]] = []
 
@@ -552,10 +652,12 @@ async def run_omni_whale_discovery(
         source_jobs.append(("dexscreener", fetch_dexscreener_breakout_whales(limit=limit_per_source)))
     if "dex_onchain" in active_sources:
         source_jobs.append(("dex_onchain", fetch_onchain_dex_whales(limit=limit_per_source)))
+    if "nansen" in active_sources:
+        source_jobs.append(("nansen", fetch_nansen_smart_money(limit=limit_per_source)))
 
     if source_jobs:
         if progress_callback:
-            progress_callback("Scanning GMGN, DexScreener, and DEX pools concurrently...", 10, 100)
+            progress_callback("Scanning GMGN, DexScreener, DEX pools, and Nansen concurrently...", 10, 100)
         results = await asyncio.gather(*(job for _, job in source_jobs), return_exceptions=True)
         for (source_name, _), result in zip(source_jobs, results):
             if isinstance(result, Exception):
@@ -563,10 +665,10 @@ async def run_omni_whale_discovery(
                 continue
             raw_candidates.extend(result)
 
-    # Channel 4: Cluster Consensus
+    # Channel 5: Cluster Consensus
     if "cluster" in active_sources:
         if progress_callback:
-            progress_callback("Channel 4: Evaluating Smart Money Cluster Consensus...", 65, 100)
+            progress_callback("Channel 5: Evaluating Smart Money Cluster Consensus...", 65, 100)
         known_wl = whale_manager.get_whitelist_set()
         c4 = detect_cluster_consensus(raw_candidates, known_wl)
         raw_candidates.extend(c4)
@@ -603,6 +705,7 @@ async def run_omni_whale_discovery(
             "total_evaluated": 0,
             "clean_alphas_found": 0,
             "blocked_toxic_found": 0,
+            "consensus_rejected_found": 0,
             "message": "No unique candidates found across specified channels."
         }
 
@@ -619,6 +722,7 @@ async def run_omni_whale_discovery(
 
     clean_discovered = 0
     blocked_toxic = 0
+    consensus_rejected = 0
 
     # Evaluate each wallet via 7D GMGN stats & AI Gauntlet
     for idx, w in enumerate(unique_wallets, 1):
@@ -640,19 +744,25 @@ async def run_omni_whale_discovery(
         if not profile:
             profile = {"wallet": w, "1d": {}, "7d": {}, "30d": {}, "tags": []}
 
-        safety = evaluate_wallet_safety(w, profile)
-        if safety["passed_filters"]:
-            clean_discovered += 1
-        else:
-            blocked_toxic += 1
-
         # Enrich profile with omni-channel metadata
         profile["discovery_sources"] = sources_list
         profile["channel_details"] = meta["details"]
         profile["discovery_tokens"] = sorted(set(meta["tokens"]))
         profile["last_discovered_at"] = max(meta["observed_at"], default=time.time())
         profile["evaluated_at"] = time.time()
+        safety = evaluate_wallet_safety(w, profile)
+        consensus = evaluate_discovery_consensus(profile)
         profile.update(safety)
+        profile.update(consensus)
+        profile["whitelist_eligible"] = bool(
+            safety["passed_filters"] and consensus["source_consensus_passed"]
+        )
+        if profile["whitelist_eligible"]:
+            clean_discovered += 1
+        elif not safety["passed_filters"]:
+            blocked_toxic += 1
+        else:
+            consensus_rejected += 1
 
         # Add to existing map
         existing_dict[w] = profile
@@ -662,11 +772,16 @@ async def run_omni_whale_discovery(
         profile.update(evaluate_wallet_safety(wallet, profile))
         if not profile.get("discovery_sources"):
             profile["discovery_sources"] = [DiscoverySource.LOCAL_HISTORY.value]
+        profile.update(evaluate_discovery_consensus(profile))
+        profile["whitelist_eligible"] = bool(
+            profile.get("passed_filters") and profile.get("source_consensus_passed")
+        )
 
     # Save clean and quarantined profiles for dashboard audit.
     updated_ranked = list(existing_dict.values())
     updated_ranked.sort(key=lambda x: (
-        bool(x.get("passed_filters")),
+        bool(x.get("whitelist_eligible")),
+        int(x.get("independent_source_count", 0) or 0),
         DiscoverySource.CLUSTER.value in x.get("discovery_sources", []),
         float(x.get("7d", {}).get("realized", 0.0) or 0.0),
     ), reverse=True)
@@ -688,13 +803,20 @@ async def run_omni_whale_discovery(
     if progress_callback:
         progress_callback(f"Done! Evaluated {total_unique} wallets. Found {clean_discovered} verified alphas.", 100, 100)
 
-    log.info(f"✅ Omni-Channel Discovery Complete: {clean_discovered} verified clean alphas, {blocked_toxic} toxic blocked.")
+    log.info(
+        "Omni-Channel Discovery Complete: %s whitelist-eligible, %s toxic blocked, "
+        "%s awaiting source consensus.",
+        clean_discovered,
+        blocked_toxic,
+        consensus_rejected,
+    )
 
     return {
         "status": "completed",
         "total_evaluated": total_unique,
         "clean_alphas_found": clean_discovered,
         "blocked_toxic_found": blocked_toxic,
+        "consensus_rejected_found": consensus_rejected,
         "total_ranked_db": len(updated_ranked),
         "channels_scanned": active_sources
     }
