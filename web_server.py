@@ -528,6 +528,7 @@ async def get_neutral_whales(filter: str = "all", sort_by: str = "pnl", source: 
             "source_consensus_passed": consensus["source_consensus_passed"],
             "independent_source_count": consensus["independent_source_count"],
             "independent_sources": consensus["independent_sources"],
+            "performance_source": r.get("performance_source", "gmgn_or_primary"),
             "winrate_7d": wr,
             "profit_7d": profit,
             "trades_7d": trades,

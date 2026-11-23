@@ -28,12 +28,20 @@ class RateBudget:
     RateBudget enforces requests-per-minute limits using a token bucket / sliding window concept,
     with soft ceilings for low-priority calls and hard ceilings for high-priority ones.
     """
-    def __init__(self, name: str, max_requests_per_minute: int, soft_ceiling_pct: float = 0.8):
+    def __init__(
+        self,
+        name: str,
+        max_requests_per_minute: int,
+        soft_ceiling_pct: float = 0.8,
+        min_interval_seconds: float = 0.0,
+    ):
         self._name = name
         self._max = max_requests_per_minute
-        self._soft = int(max_requests_per_minute * soft_ceiling_pct)
+        self._soft = max(1, int(max_requests_per_minute * soft_ceiling_pct))
+        self._min_interval = max(0.0, float(min_interval_seconds))
         self._window_start = time.time()
         self._count = 0
+        self._last_acquired = 0.0
         self._lock = asyncio.Lock()
         
         # Stats tracking
@@ -63,14 +71,19 @@ class RateBudget:
             async with self._lock:
                 self._reset_window_if_needed(now)
                 
-                if self._count < ceiling:
+                interval_wait = self._min_interval - (now - self._last_acquired)
+                if self._count < ceiling and interval_wait <= 0:
                     self._count += 1
+                    self._last_acquired = now
                     self._stats["total_requests"] += 1
                     return
+
+                if self._count >= ceiling:
+                    wait_time = 60.0 - (now - self._window_start) + 0.1
+                else:
+                    wait_time = interval_wait
                 
-                wait_time = 60.0 - (now - self._window_start) + 0.1
-                
-                if not warned:
+                if self._count >= ceiling and not warned:
                     log.warning(f"[{self._name}] Rate limit approaching ({self._count}/{ceiling}). Throttling for {wait_time:.2f}s.")
                     self._stats["throttle_events"] += 1
                     warned = True
@@ -87,6 +100,10 @@ class RateBudget:
         """Record an error associated with this API."""
         self._stats["errors"] += 1
 
+    def observe_throttle(self):
+        """Record a provider-side throttle response."""
+        self._stats["throttle_events"] += 1
+
     def get_stats(self) -> Dict[str, Any]:
         """Return statistics for the budget."""
         return {
@@ -99,7 +116,14 @@ class RateBudget:
 
 
 DEXSCREENER_BUDGET = RateBudget('DexScreener', 300, soft_ceiling_pct=0.85)
-GECKOTERMINAL_BUDGET = RateBudget('GeckoTerminal', 30, soft_ceiling_pct=0.8)
+# GeckoTerminal's keyless public API is approximately 10 calls/minute and can
+# fluctuate with global traffic. Pace calls rather than permitting an initial burst.
+GECKOTERMINAL_BUDGET = RateBudget(
+    'GeckoTerminal',
+    10,
+    soft_ceiling_pct=0.8,
+    min_interval_seconds=7.5,
+)
 NANSEN_BUDGET = RateBudget('Nansen', 60, soft_ceiling_pct=0.8)
 JUPITER_BUDGET = RateBudget('Jupiter', 600, soft_ceiling_pct=0.8)
 RPC_BUDGET = RateBudget('SolanaRPC', 100, soft_ceiling_pct=0.8)
@@ -112,6 +136,7 @@ JITO_BUDGET = RateBudget('JitoBlockEngine', 120, soft_ceiling_pct=0.85)
 
 _client: Optional[httpx.AsyncClient] = None
 _client_lock = asyncio.Lock()
+_gecko_semaphore = asyncio.Semaphore(1)
 
 async def get_client() -> httpx.AsyncClient:
     """Get or create the shared async HTTP client."""
@@ -195,21 +220,52 @@ async def dex_get(url: str, params: Optional[Dict[str, Any]] = None, priority: s
         return None
 
 async def gecko_get(url: str, params: Optional[Dict[str, Any]] = None, priority: str = 'normal') -> Optional[Dict[str, Any]]:
-    """Rate-budgeted GET to GeckoTerminal's public API."""
-    await GECKOTERMINAL_BUDGET.acquire(priority=priority)
+    """Paced GeckoTerminal GET with bounded retry for provider throttling."""
     client = await get_client()
-    try:
-        response = await client.get(
-            url,
-            params=params,
-            headers={"Accept": "application/json;version=20230302"},
-        )
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        GECKOTERMINAL_BUDGET.observe_error()
-        log.error(f"GeckoTerminal GET failed: {e}")
-        return None
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            async with _gecko_semaphore:
+                await GECKOTERMINAL_BUDGET.acquire(priority=priority)
+                response = await client.get(
+                    url,
+                    params=params,
+                    headers={"Accept": "application/json;version=20230203"},
+                )
+
+            if response.status_code == 429:
+                GECKOTERMINAL_BUDGET.observe_throttle()
+                retry_header = response.headers.get("Retry-After", "").strip()
+                try:
+                    retry_after = float(retry_header)
+                except (TypeError, ValueError):
+                    retry_after = min(60.0, 10.0 * (2 ** attempt))
+                retry_after = max(1.0, min(retry_after, 120.0))
+                log.warning(
+                    "GeckoTerminal throttled request (attempt %s/%s); retrying in %.1fs.",
+                    attempt + 1,
+                    max_attempts,
+                    retry_after,
+                )
+                if attempt + 1 < max_attempts:
+                    await asyncio.sleep(retry_after)
+                    continue
+                GECKOTERMINAL_BUDGET.observe_error()
+                log.error("GeckoTerminal GET failed after %s throttled attempts: %s", max_attempts, url)
+                return None
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            GECKOTERMINAL_BUDGET.observe_error()
+            log.error(f"GeckoTerminal GET failed: {e}")
+            return None
+        except Exception as e:
+            GECKOTERMINAL_BUDGET.observe_error()
+            log.error(f"GeckoTerminal GET failed: {e}")
+            return None
+
+    return None
 
 async def jupiter_get(url: str, params: Optional[Dict[str, Any]] = None, priority: str = 'normal') -> Optional[Dict[str, Any]]:
     """Rate-budgeted GET to Jupiter API."""

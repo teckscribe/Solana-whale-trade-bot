@@ -341,7 +341,7 @@ Whales that stop trading or lose profitability are automatically pruned:
   BANNED_TAGS = {'arbitrager', 'top_dev', 'sniper', 'smart_degen', 'kol', 'pump_dump'}
   ```
   Wallets passing the filter are queued and sent via Telegram for user approval.
-- **`omni_whale_finder.py`**: Merges GMGN, DexScreener, DEX pool, optional Nansen Smart Money, and derived cluster observations. A wallet is whitelist-eligible only when it passes the performance/toxicity policy and is independently observed by at least two external feeds; cluster and local-history evidence do not count as independent corroboration.
+- **`omni_whale_finder.py`**: Merges GMGN, DexScreener, DEX pool, optional Nansen Smart Money, and derived cluster observations. Empty primary 7-day profiles can use a credit-capped Nansen Profiler PnL summary. A wallet is whitelist-eligible only when it passes the performance/toxicity policy and is independently observed by at least two external feeds; cluster and local-history evidence do not count as independent corroboration.
 
 ### 10.4 AI Whale Scoring & Vetting Engine (`ai_whale_scorer.py`)
 Adapted from `fomo-robinhood-radar`'s `pipeline/score.py`:
@@ -394,7 +394,7 @@ class RateBudget:
 - **`acquire(priority='high')`**: Sell and stop-loss execution calls access 100% of hard limit.
 
 ### 12.3 Managed Budgets & Persistent Clients
-- **Budgets**: `jupiter` (600 RPM), `dexscreener` (300 RPM), `rpc` (1200 RPM), `coingecko` (50 RPM).
+- **Budgets**: `jupiter` (600 RPM), `dexscreener` (300 RPM), `rpc` (100 RPM), `nansen` (60 RPM), and keyless GeckoTerminal (8 paced calls/minute with serialized access and bounded 429 retry).
 - **Session Pooling**: Manages a shared `httpx.AsyncClient` with `limits=httpx.Limits(max_keepalive_connections=50, max_connections=100)`.
 
 ---

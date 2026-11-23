@@ -69,7 +69,7 @@ The **TRAM (True RAM)** architecture eliminates all disk I/O from the trade path
 ## 🌟 Core Features
 
 - **Real-Time On-Chain Whale Tracking**: Subscribes to Solana transaction streams via WebSocket (Helius, Alchemy, QuickNode) and parses swap operations across Raydium (AMM v4, CLMM, CPMM), Orca (Whirlpool), Pump.fun, and Jupiter DEX.
-- **Five-Channel Whale Discovery**: GMGN, DexScreener, DEX on-chain pools, optional Nansen Smart Money, and derived cluster evidence feed a shared ranking pipeline. Whitelist additions require both the performance/toxicity gates and corroboration by at least two independent feeds.
+- **Five-Channel Whale Discovery**: GMGN, DexScreener, DEX on-chain pools, optional Nansen Smart Money, and derived cluster evidence feed a shared ranking pipeline. Empty primary profiles receive a bounded Nansen 7-day PnL fallback. Whitelist additions still require both the performance/toxicity gates and corroboration by at least two independent feeds.
 - **Dual Trading Engine**:
   - **Paper Mode**: Simulates real Solana market conditions including dynamic Raydium/Jupiter pool fees, network gas, ATA (Associated Token Account) rent creation/reclamation, and slippage.
   - **Live Mode**: Submits real on-chain swap transactions via Jupiter Swap API v6 and GMGN priority routing.

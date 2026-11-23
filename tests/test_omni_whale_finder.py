@@ -19,6 +19,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import omni_whale_finder
+import connection_pool
 from omni_whale_finder import (
     DiscoverySource,
     detect_cluster_consensus,
@@ -139,7 +140,11 @@ def test_nansen_channel_parses_unique_solana_traders():
                 "trade_value_usd": 1000,
             }],
         }
-        with patch.dict(os.environ, {"NANSEN_API_KEY": "test-key", "NANSEN_DISCOVERY_ENABLED": "TRUE"}), \
+        with patch.dict(os.environ, {
+            "NANSEN_API_KEY": "test-key",
+            "NANSEN_DISCOVERY_ENABLED": "TRUE",
+            "NANSEN_SMART_MONEY_LABELS": "30D Smart Trader,90D Smart Trader,180D Smart Trader",
+        }), \
              patch("connection_pool.nansen_post", new_callable=AsyncMock, return_value=payload) as post:
             found = await omni_whale_finder.fetch_nansen_smart_money(limit=10)
 
@@ -149,6 +154,63 @@ def test_nansen_channel_parses_unique_solana_traders():
         request = post.await_args.kwargs["json_data"]
         assert request["chains"] == ["solana"]
         assert request["filters"]["trade_value_usd"]["min"] == 1000.0
+        assert request["filters"]["include_smart_money_labels"] == [
+            "30D Smart Trader", "90D Smart Trader", "180D Smart Trader",
+        ]
+
+    asyncio.run(_run())
+
+
+def test_nansen_profiler_fallback_parses_7d_summary():
+    async def _run():
+        wallet = "7" * 44
+        response = {
+            "traded_token_count": 6,
+            "traded_times": 18,
+            "realized_pnl_usd": 2450.75,
+            "realized_pnl_percent": 32.5,
+            "win_rate": 66.7,
+            "top5_tokens": [{"token_symbol": "ALPHA", "realized_pnl": 900}],
+        }
+        with patch.dict(os.environ, {"NANSEN_API_KEY": "test-key"}), \
+             patch("connection_pool.nansen_post", new_callable=AsyncMock, return_value=response) as post:
+            profile = await omni_whale_finder.fetch_nansen_wallet_profile(wallet, days=7)
+
+        assert profile["7d"]["trades"] == 18
+        assert profile["7d"]["winrate"] == 66.7
+        assert profile["7d"]["realized"] == 2450.75
+        assert profile["performance_source"] == "nansen_profiler_pnl_summary"
+        request = post.await_args.kwargs["json_data"]
+        assert request["address"] == wallet
+        assert request["chain"] == "solana"
+        assert request["date"]["from"].endswith("Z")
+        assert request["date"]["to"].endswith("Z")
+
+    asyncio.run(_run())
+
+
+def test_gecko_get_retries_provider_throttle():
+    async def _run():
+        throttled = MagicMock()
+        throttled.status_code = 429
+        throttled.headers = {"Retry-After": "0"}
+
+        success = MagicMock()
+        success.status_code = 200
+        success.headers = {}
+        success.json.return_value = {"data": ["ok"]}
+        success.raise_for_status.return_value = None
+
+        client = MagicMock()
+        client.get = AsyncMock(side_effect=[throttled, success])
+        with patch("connection_pool.get_client", new_callable=AsyncMock, return_value=client), \
+             patch.object(connection_pool.GECKOTERMINAL_BUDGET, "acquire", new_callable=AsyncMock), \
+             patch("connection_pool.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            result = await connection_pool.gecko_get("https://api.geckoterminal.com/api/v2/test")
+
+        assert result == {"data": ["ok"]}
+        assert client.get.await_count == 2
+        sleep.assert_awaited_once_with(1.0)
 
     asyncio.run(_run())
 
@@ -254,6 +316,52 @@ def test_omni_whale_discovery_orchestrator(tmp_path):
             toxic_w = next(x for x in saved if "ToxicSniper" in x["wallet"])
             assert toxic_w["passed_filters"] is False
             assert toxic_w["rejections"]
+
+    asyncio.run(_run())
+
+
+def test_orchestrator_uses_nansen_profile_only_when_primary_is_empty(tmp_path):
+    async def _run():
+        wallet = "7" * 44
+        fake_ranked_file = str(tmp_path / "neutral_whales_ranked.json")
+        gmgn = [{"wallet": wallet, "source": "gmgn", "token": "A" * 44}]
+        nansen = [{"wallet": wallet, "source": "nansen", "token": "A" * 44}]
+        fallback = {
+            "wallet": wallet,
+            "1d": {},
+            "7d": {"winrate": 70.0, "trades": 20, "realized": 1500.0},
+            "30d": {},
+            "tags": ["nansen_smart_trader"],
+            "performance_source": "nansen_profiler_pnl_summary",
+            "performance_fetched_at": omni_whale_finder.time.time(),
+        }
+
+        with patch.dict(os.environ, {
+            "NANSEN_PROFILE_FALLBACK_ENABLED": "TRUE",
+            "NANSEN_PROFILE_FALLBACK_LIMIT": "5",
+        }), patch("omni_whale_finder.RANKED_FILE", fake_ranked_file), \
+             patch("omni_whale_finder.fetch_gmgn_smart_money", new_callable=AsyncMock, return_value=gmgn), \
+             patch("omni_whale_finder.fetch_nansen_smart_money", new_callable=AsyncMock, return_value=nansen), \
+             patch("omni_whale_finder.fetch_nansen_wallet_profile", new_callable=AsyncMock, return_value=fallback) as profiler, \
+             patch("whale_scanner_core.fetch_wallet_profile", return_value={"wallet": wallet, "7d": {}, "tags": []}), \
+             patch("ai_whale_scorer._get_copy_performance", return_value=None):
+            result = await omni_whale_finder.run_omni_whale_discovery(
+                sources=["gmgn", "nansen"],
+                limit_per_source=5,
+            )
+            cached_result = await omni_whale_finder.run_omni_whale_discovery(
+                sources=["gmgn", "nansen"],
+                limit_per_source=5,
+            )
+
+        assert result["clean_alphas_found"] == 1
+        assert result["nansen_profiles_used"] == 1
+        assert cached_result["nansen_profile_cache_hits"] == 1
+        assert cached_result["nansen_profile_attempts"] == 0
+        profiler.assert_awaited_once_with(wallet, days=7)
+        saved = json.loads((tmp_path / "neutral_whales_ranked.json").read_text(encoding="utf-8"))
+        assert saved[0]["whitelist_eligible"] is True
+        assert saved[0]["performance_source"] == "nansen_profiler_pnl_summary"
 
     asyncio.run(_run())
 

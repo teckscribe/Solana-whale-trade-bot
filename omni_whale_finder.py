@@ -26,7 +26,7 @@ import asyncio
 import subprocess
 import shutil
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional, Set, Tuple
 from enum import Enum
 from dotenv import load_dotenv
@@ -472,7 +472,7 @@ async def fetch_nansen_smart_money(limit: int = 20) -> List[Dict[str, Any]]:
         label.strip()
         for label in os.getenv(
             "NANSEN_SMART_MONEY_LABELS",
-            "Smart Trader,30D Smart Trader,90D Smart Trader,180D Smart Trader",
+            "30D Smart Trader,90D Smart Trader,180D Smart Trader",
         ).split(",")
         if label.strip()
     ]
@@ -525,6 +525,72 @@ async def fetch_nansen_smart_money(limit: int = 20) -> List[Dict[str, Any]]:
 
     log.info(f"[Channel 4 - Nansen] Discovered {len(candidates)} labeled smart traders.")
     return candidates
+
+
+async def fetch_nansen_wallet_profile(wallet: str, days: int = 7) -> Optional[Dict[str, Any]]:
+    """Fetch a fail-closed PnL summary when the primary wallet profiler has no 7D data."""
+    if not os.getenv("NANSEN_API_KEY", "").strip():
+        return None
+    if not SOLANA_ADDRESS_PATTERN.fullmatch(str(wallet).strip()):
+        return None
+
+    days = max(1, min(int(days), 30))
+    end_at = datetime.now(timezone.utc)
+    start_at = end_at - timedelta(days=days)
+    payload = {
+        "address": wallet,
+        "chain": "solana",
+        "date": {
+            "from": start_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "to": end_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        },
+    }
+    response = await connection_pool.nansen_post(
+        "https://api.nansen.ai/api/v1/profiler/address/pnl-summary",
+        json_data=payload,
+    )
+    if not isinstance(response, dict):
+        return None
+
+    summary = response.get("data") if isinstance(response.get("data"), dict) else response
+    try:
+        trades = int(float(summary.get("traded_times", 0) or 0))
+        winrate = float(summary.get("win_rate", 0.0) or 0.0)
+        realized = float(summary.get("realized_pnl_usd", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        log.warning("[Nansen Profiler] Invalid PnL summary for %s", wallet[:8])
+        return None
+
+    if trades <= 0:
+        log.info("[Nansen Profiler] No %s-day trades for %s", days, wallet[:8])
+        return None
+
+    # Nansen documents win_rate as a percentage. Clamp invalid provider output
+    # rather than converting an ambiguous sub-1 value into an optimistic score.
+    winrate = max(0.0, min(winrate, 100.0))
+    log.info(
+        "[Nansen Profiler] %s: %s trades, %.1f%% win rate, $%.2f realized over %sd",
+        wallet[:8],
+        trades,
+        winrate,
+        realized,
+        days,
+    )
+    return {
+        "wallet": wallet,
+        "1d": {},
+        "7d": {
+            "winrate": winrate,
+            "trades": trades,
+            "realized": realized,
+            "native_balance": 0.0,
+        },
+        "30d": {},
+        "tags": ["nansen_smart_trader"],
+        "performance_source": "nansen_profiler_pnl_summary",
+        "performance_fetched_at": time.time(),
+        "nansen_top_tokens": summary.get("top5_tokens", []) or [],
+    }
 
 
 # ─── CHANNEL 5: Multi-Whale Cluster Consensus (Cielo-Style) ───────────────────
@@ -625,7 +691,7 @@ async def run_omni_whale_discovery(
     Executes the 5-channel discovery pipeline:
       1. Gathers candidates from GMGN, DexScreener, DEX pools, Nansen, and Cluster.
       2. Merges and de-duplicates candidate wallets.
-      3. Pulls full 7D/30D GMGN performance stats for each wallet.
+      3. Pulls GMGN performance stats, with bounded Nansen PnL fallback for empty profiles.
       4. Enforces the strict institutional anti-toxicity gauntlet.
       5. Saves and ranks new clean alphas into data/neutral_whales_ranked.json.
     """
@@ -706,6 +772,9 @@ async def run_omni_whale_discovery(
             "clean_alphas_found": 0,
             "blocked_toxic_found": 0,
             "consensus_rejected_found": 0,
+            "nansen_profiles_used": 0,
+            "nansen_profile_attempts": 0,
+            "nansen_profile_cache_hits": 0,
             "message": "No unique candidates found across specified channels."
         }
 
@@ -723,6 +792,27 @@ async def run_omni_whale_discovery(
     clean_discovered = 0
     blocked_toxic = 0
     consensus_rejected = 0
+    nansen_profiles_used = 0
+    nansen_profile_attempts = 0
+    nansen_profile_cache_hits = 0
+    try:
+        nansen_profile_limit = max(
+            0,
+            min(int(os.getenv("NANSEN_PROFILE_FALLBACK_LIMIT", "5") or 5), 20),
+        )
+    except ValueError:
+        nansen_profile_limit = 5
+    try:
+        nansen_profile_cache_ttl = max(
+            0.0,
+            min(float(os.getenv("NANSEN_PROFILE_CACHE_TTL_HOURS", "6") or 6), 168.0),
+        ) * 3600.0
+    except ValueError:
+        nansen_profile_cache_ttl = 6 * 3600.0
+    nansen_profile_enabled = (
+        os.getenv("NANSEN_PROFILE_FALLBACK_ENABLED", "TRUE").strip().upper()
+        in {"1", "TRUE", "YES", "ON"}
+    )
 
     # Evaluate each wallet via 7D GMGN stats & AI Gauntlet
     for idx, w in enumerate(unique_wallets, 1):
@@ -744,9 +834,60 @@ async def run_omni_whale_discovery(
         if not profile:
             profile = {"wallet": w, "1d": {}, "7d": {}, "30d": {}, "tags": []}
 
+        try:
+            primary_trades = int(float((profile.get("7d", {}) or {}).get("trades", 0) or 0))
+        except (TypeError, ValueError):
+            primary_trades = 0
+        should_consider_nansen_fallback = (
+            nansen_profile_enabled
+            and DiscoverySource.NANSEN.value in sources_list
+            and primary_trades <= 0
+        )
+        if should_consider_nansen_fallback:
+            primary_tags = list(profile.get("tags", []) or [])
+            profile["nansen_profile_fallback_attempted"] = True
+            cached_profile = existing_dict.get(w, {}) or {}
+            try:
+                cached_fetched_at = float(
+                    cached_profile.get("performance_fetched_at", 0.0) or 0.0
+                )
+                cached_trades = int(float(
+                    (cached_profile.get("7d", {}) or {}).get("trades", 0) or 0
+                ))
+            except (TypeError, ValueError):
+                cached_fetched_at = 0.0
+                cached_trades = 0
+            cached_age = time.time() - cached_fetched_at
+            cache_valid = (
+                cached_profile.get("performance_source") == "nansen_profiler_pnl_summary"
+                and cached_trades > 0
+                and nansen_profile_cache_ttl > 0
+                and 0 <= cached_age <= nansen_profile_cache_ttl
+            )
+            if cache_valid:
+                profile = dict(cached_profile)
+                profile["tags"] = sorted(set(
+                    primary_tags + list(profile.get("tags", []) or [])
+                ))
+                profile["nansen_profile_cache_hit"] = True
+                nansen_profiles_used += 1
+                nansen_profile_cache_hits += 1
+            elif nansen_profile_attempts < nansen_profile_limit:
+                nansen_profile_attempts += 1
+                nansen_profile = await fetch_nansen_wallet_profile(w, days=7)
+                if nansen_profile:
+                    nansen_profile["tags"] = sorted(set(
+                        primary_tags + list(nansen_profile.get("tags", []) or [])
+                    ))
+                    nansen_profile["nansen_profile_fallback_attempted"] = True
+                    profile = nansen_profile
+                    nansen_profiles_used += 1
+
         # Enrich profile with omni-channel metadata
         profile["discovery_sources"] = sources_list
-        profile["channel_details"] = meta["details"]
+        profile["channel_details"] = list(meta["details"])
+        if profile.get("performance_source") == "nansen_profiler_pnl_summary":
+            profile["channel_details"].append("7D performance verified by Nansen Profiler")
         profile["discovery_tokens"] = sorted(set(meta["tokens"]))
         profile["last_discovered_at"] = max(meta["observed_at"], default=time.time())
         profile["evaluated_at"] = time.time()
@@ -817,6 +958,9 @@ async def run_omni_whale_discovery(
         "clean_alphas_found": clean_discovered,
         "blocked_toxic_found": blocked_toxic,
         "consensus_rejected_found": consensus_rejected,
+        "nansen_profiles_used": nansen_profiles_used,
+        "nansen_profile_attempts": nansen_profile_attempts,
+        "nansen_profile_cache_hits": nansen_profile_cache_hits,
         "total_ranked_db": len(updated_ranked),
         "channels_scanned": active_sources
     }
