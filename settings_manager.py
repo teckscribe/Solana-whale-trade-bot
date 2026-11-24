@@ -30,9 +30,9 @@ def _s(key: str, type_: str, default: Any, min_val: float = None, max_val: float
 
 SPEC = [
     _s("TRADE_MODE", "choice", "PAPER", options=["PAPER", "LIVE", "TRUE", "FALSE"], group="General", help_="Trading mode"),
-    _s("ALLOCATION_PCT", "float", 25.0, min_val=1.0, max_val=100.0, group="Risk", help_="Percent of balance to allocate per trade"),
+    _s("ALLOCATION_PCT", "float", 15.0, min_val=1.0, max_val=100.0, group="Risk", help_="Percent of balance to allocate per trade"),
     _s("TAKE_PROFIT_PCT", "float", 20.0, min_val=1.0, max_val=500.0, group="Risk", help_="Take profit percentage"),
-    _s("STOP_LOSS_PCT", "float", -12.0, min_val=-50.0, max_val=-0.5, group="Risk", help_="Stop loss percentage (negative)"),
+    _s("STOP_LOSS_PCT", "float", -10.0, min_val=-50.0, max_val=-0.5, group="Risk", help_="Stop loss percentage (negative)"),
     _s("TIMEOUT_ENABLED", "bool", True, group="Risk", help_="Enable time-based exit"),
     _s("TIMEOUT_MINUTES", "int", 30, min_val=1, max_val=1440, group="Risk", help_="Maximum hold time in minutes"),
     _s("MAX_CONCURRENT_TRADES", "int", 2, min_val=1, max_val=50, group="Risk", help_="Maximum simultaneous open trades"),
@@ -46,18 +46,18 @@ SPEC = [
     _s("ATA_RENT_RECLAIMED", "bool", True, group="Fees", help_="Assume Associated Token Account (ATA) rent is reclaimed upon closing"),
     _s("MAX_PRICE_IMPACT_PCT", "float", 3.0, min_val=0.1, max_val=20.0, group="Risk", help_="Maximum acceptable price impact"),
     _s("MAX_POOL_SHARE_PCT", "float", 1.0, min_val=0.1, max_val=10.0, group="Risk", help_="Maximum share of pool liquidity"),
-    _s("MAX_PORTFOLIO_EXPOSURE_PCT", "float", 100.0, min_val=10.0, max_val=100.0, group="Risk", help_="Max portfolio exposure percentage"),
+    _s("MAX_PORTFOLIO_EXPOSURE_PCT", "float", 60.0, min_val=10.0, max_val=100.0, group="Risk", help_="Max portfolio exposure percentage"),
     _s("MIN_TRADE_SOL", "float", 0.02, min_val=0.001, max_val=10.0, group="Risk", help_="Minimum trade size in SOL"),
     _s("LIVE_FEE_RESERVE_SOL", "float", 0.01, min_val=0.001, max_val=1.0, group="Risk", help_="SOL reserve left unallocated for fees"),
     _s("GMGN_DISCOVERY_ENABLED", "bool", True, group="General", help_="Enable GMGN discovery"),
     _s("DISCOVERY_INTERVAL_MINUTES", "int", 10, min_val=1, max_val=60, group="General", help_="Interval for discovery in minutes"),
-    _s("PAPER_BALANCE_USD", "float", 100.0, min_val=1.0, max_val=100000.0, group="General", help_="Starting paper balance in USD"),
-    _s("PAPER_WALLET_BALANCE", "float", 100.0, min_val=0.0, max_val=100000.0, group="General", help_="Current simulated paper wallet balance in USD"),
+    _s("PAPER_BALANCE_USD", "float", 50.0, min_val=1.0, max_val=100000.0, group="General", help_="Starting paper balance in USD"),
+    _s("PAPER_WALLET_BALANCE", "float", 50.0, min_val=0.0, max_val=100000.0, group="General", help_="Current simulated paper wallet balance in USD"),
     _s("POLL_INTERVAL", "float", 2.0, min_val=1.0, max_val=30.0, group="General", help_="Polling interval (dynamically computed in trade_brain)"),
     _s("MAX_RESUME_AGE_HOURS", "float", 2.0, min_val=0.1, max_val=48.0, group="General", help_="Maximum age in hours of saved positions to resume on startup"),
     _s("TRAILING_STOP_ENABLED", "bool", True, group="Risk", help_="Enable high-water-mark trailing stop"),
     _s("TRAILING_STOP_ACTIVATION_PCT", "float", 8.0, min_val=0.5, max_val=100.0, group="Risk", help_="Profit % to activate trailing stop"),
-    _s("TRAILING_STOP_CALLBACK_PCT", "float", 4.0, min_val=0.5, max_val=50.0, group="Risk", help_="Retracement % from peak to trigger exit"),
+    _s("TRAILING_STOP_CALLBACK_PCT", "float", 3.5, min_val=0.5, max_val=50.0, group="Risk", help_="Retracement % from peak to trigger exit"),
     _s("JITO_ENABLED", "bool", True, group="Execution", help_="Enable Jito MEV bundle atomic execution"),
     _s("JITO_TIP_SOL", "float", 0.0001, min_val=0.00001, max_val=0.05, group="Execution", help_="Jito tip in SOL for bundle inclusion"),
     _s("JITO_DYNAMIC_TIP", "bool", True, group="Execution", help_="Dynamically fetch tip floor percentiles"),
@@ -249,12 +249,13 @@ def _load() -> dict:
 
         raw = _read_file_raw()
 
-        # Check if .env was modified on disk and has overrides or new values
-        if env_key is not None and _cache.get("env_key") is not None and env_key != _cache.get("env_key"):
-            env_file = _read_env_file()
+        # Check if .env was modified on disk and has newly changed values (never overwrite with untouched stale .env keys)
+        env_file = _read_env_file()
+        prev_env = _cache.get("env_data")
+        if env_key is not None and _cache.get("env_key") is not None and env_key != _cache.get("env_key") and isinstance(prev_env, dict):
             env_changed = False
             for k in KEYS:
-                if k in env_file:
+                if k in env_file and env_file.get(k) != prev_env.get(k):
                     ok, typed_env, _ = validate(k, env_file[k])
                     if ok and raw.get(k) != typed_env:
                         raw[k] = typed_env
@@ -266,7 +267,7 @@ def _load() -> dict:
                 _write_raw(raw)
                 key = _file_key(SETTINGS_FILE)
 
-        _cache.update(key=key, env_key=env_key, checked=now, raw=raw, typed=_build_typed(raw))
+        _cache.update(key=key, env_key=env_key, env_data=env_file, checked=now, raw=raw, typed=_build_typed(raw))
         return _cache["typed"]
 
 def get(key: str) -> Any:
@@ -408,9 +409,53 @@ def set_value(key: str, value: Any, source: str = "unknown") -> Tuple[bool, str]
     """Alias for update() for compatibility."""
     return update(key, value, source)
 
+def sync_settings_to_env() -> bool:
+    """
+    Synchronizes non-secret strategy keys in .env with canonical data/settings.json
+    so stale legacy lines in .env never diverge from settings.json.
+    Leaves all secret keys, API URLs, and comments in .env untouched.
+    """
+    if os.path.dirname(os.path.abspath(SETTINGS_FILE)) != os.path.join(_PROJECT_DIR, "data"):
+        return False
+    if not os.path.exists(ENV_FILE) or not os.path.exists(SETTINGS_FILE):
+        return False
+    try:
+        typed = _load()
+        with open(ENV_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        changed = False
+        new_lines = []
+        keys_set = set(KEYS)
+        for line in lines:
+            s = line.strip()
+            if s and not s.startswith("#") and "=" in s:
+                k, _ = s.split("=", 1)
+                k_clean = k.strip()
+                if k_clean in keys_set and k_clean in typed:
+                    expected = to_str(k_clean, typed[k_clean])
+                    if SPEC_BY_KEY[k_clean]["type"] == "bool":
+                        expected = "TRUE" if typed[k_clean] else "FALSE"
+                    new_line = f"{k_clean}={expected}\n"
+                    if line != new_line:
+                        changed = True
+                    new_lines.append(new_line)
+                    continue
+            new_lines.append(line)
+        if changed:
+            _atomic_write_text(ENV_FILE, "".join(new_lines), prefix=".env.")
+            with _lock:
+                _cache["env_key"] = _file_key(ENV_FILE)
+                _cache["env_data"] = _read_env_file()
+        return changed
+    except Exception as e:
+        log.debug(f"Could not sync settings.json back to .env: {e}")
+        return False
+
+
 def migrate_from_env() -> bool:
-    """One-time migration: reads .env values and seeds settings.json if missing."""
+    """One-time migration: reads .env values and seeds settings.json if missing; otherwise syncs .env to settings.json."""
     if os.path.exists(SETTINGS_FILE):
+        sync_settings_to_env()
         return False
     
     os.makedirs(DATA_DIR, exist_ok=True)

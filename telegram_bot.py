@@ -486,12 +486,17 @@ def _dashboard_keyboard() -> InlineKeyboardMarkup:
 
 def _trade_control_keyboard() -> InlineKeyboardMarkup:
     mode_text = "LIVE" if "LIVE" in _get_current_mode() else "PAPER"
-    paper_init = float(_cfg("PAPER_BALANCE_USD", 25.0))
+    paper_init = float(_cfg("PAPER_BALANCE_USD", 50.0))
     paper_bal = float(_cfg("PAPER_WALLET_BALANCE", paper_init))
-    max_trades = int(_cfg("MAX_CONCURRENT_TRADES", 5))
-    tp_pct = float(_cfg("TAKE_PROFIT_PCT", 15.0))
-    sl_pct = float(_cfg("STOP_LOSS_PCT", -5.0))
-    alloc_pct = float(_cfg("ALLOCATION_PCT", 10.0))
+    max_trades = int(_cfg("MAX_CONCURRENT_TRADES", 2))
+    tp_pct = float(_cfg("TAKE_PROFIT_PCT", 20.0))
+    sl_pct = float(_cfg("STOP_LOSS_PCT", -10.0))
+    alloc_pct = float(_cfg("ALLOCATION_PCT", 15.0))
+    trail_on = "ON" if bool(_cfg("TRAILING_STOP_ENABLED", True)) else "OFF"
+    trail_act = float(_cfg("TRAILING_STOP_ACTIVATION_PCT", 8.0))
+    trail_cb = float(_cfg("TRAILING_STOP_CALLBACK_PCT", 3.5))
+    max_exp = float(_cfg("MAX_PORTFOLIO_EXPOSURE_PCT", 60.0))
+    max_daily_loss = float(_cfg("MAX_DAILY_LOSS_PCT", 5.0))
     
     timeout_enabled = bool(_cfg("TIMEOUT_ENABLED", True))
     timeout_text = "ON" if timeout_enabled else "OFF"
@@ -499,15 +504,19 @@ def _trade_control_keyboard() -> InlineKeyboardMarkup:
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🔄 Trade Mode: {mode_text}", callback_data="confirm_toggle_mode")],
-        [InlineKeyboardButton(f"⏳ Timeout: {timeout_text}", callback_data="confirm_toggle_timeout")],
-        [InlineKeyboardButton(f"⏱️ Timeout Time: {timeout_mins}m", callback_data="edit_TIMEOUT_MINUTES")],
+        [InlineKeyboardButton(f"⏳ Timeout: {timeout_text}", callback_data="confirm_toggle_timeout"),
+         InlineKeyboardButton(f"⏱️ Hold Max: {timeout_mins}m", callback_data="edit_TIMEOUT_MINUTES")],
         [InlineKeyboardButton(f"💵 Starting: ${paper_init:.2f}", callback_data="edit_PAPER_BALANCE_USD"),
          InlineKeyboardButton(f"💰 Wallet: ${paper_bal:.2f}", callback_data="view_paper_balance")],
         [InlineKeyboardButton("🔄 Reset Paper Balance to Starting", callback_data="confirm_reset_paper_wallet")],
-        [InlineKeyboardButton(f"🔢 Max Trades: {max_trades}", callback_data="edit_MAX_CONCURRENT_TRADES")],
-        [InlineKeyboardButton(f"📈 Take Profit: {tp_pct}%", callback_data="edit_TAKE_PROFIT_PCT")],
-        [InlineKeyboardButton(f"🛑 Stop Loss: {sl_pct}%", callback_data="edit_STOP_LOSS_PCT")],
-        [InlineKeyboardButton(f"💼 Allocation: {alloc_pct}%", callback_data="edit_ALLOCATION_PCT")],
+        [InlineKeyboardButton(f"🔢 Max Trades: {max_trades}", callback_data="edit_MAX_CONCURRENT_TRADES"),
+         InlineKeyboardButton(f"💼 Allocation: {alloc_pct}%", callback_data="edit_ALLOCATION_PCT")],
+        [InlineKeyboardButton(f"📈 Take Profit: {tp_pct}%", callback_data="edit_TAKE_PROFIT_PCT"),
+         InlineKeyboardButton(f"🛑 Stop Loss: {sl_pct}%", callback_data="edit_STOP_LOSS_PCT")],
+        [InlineKeyboardButton(f"🎯 Trail Act ({trail_on}): +{trail_act}%", callback_data="edit_TRAILING_STOP_ACTIVATION_PCT"),
+         InlineKeyboardButton(f"📉 Trail Callback: {trail_cb}%", callback_data="edit_TRAILING_STOP_CALLBACK_PCT")],
+        [InlineKeyboardButton(f"🛡️ Max Exposure: {max_exp}%", callback_data="edit_MAX_PORTFOLIO_EXPOSURE_PCT"),
+         InlineKeyboardButton(f"🚨 Daily Loss Cap: {max_daily_loss}%", callback_data="edit_MAX_DAILY_LOSS_PCT")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_main")]
     ])
 
@@ -531,23 +540,31 @@ def _lists_keyboard() -> InlineKeyboardMarkup:
     ])
 
 def _pretrade_keyboard() -> InlineKeyboardMarkup:
-    mom = bool(_cfg("MOMENTUM_FILTER_ENABLED", False))
+    mom = bool(_cfg("MOMENTUM_FILTER_ENABLED", True))
     mom_display = "ON" if mom else "OFF"
-    max_pump = float(_cfg("MAX_M5_PUMP_PCT", 300.0))
-    min_vol = float(_cfg("MIN_24H_VOLUME", 50000.0))
-    min_mc = float(_cfg("MIN_MARKET_CAP", 50000.0))
+    max_pump = float(_cfg("MAX_M5_PUMP_PCT", 80.0))
+    min_vol = float(_cfg("MIN_24H_VOLUME", 25000.0))
+    min_mc = float(_cfg("MIN_MARKET_CAP", 35000.0))
     disc_int = int(_cfg("DISCOVERY_INTERVAL_MINUTES", 10))
     min_whale_vol = float(_cfg("MIN_WHALE_SOL_VOLUME", 1.0))
     min_trade_sol = float(_cfg("MIN_TRADE_SOL", 0.02))
+    loss_cd = int(_cfg("TOKEN_COOLDOWN_MINUTES", 15))
+    max_losses_24h = int(_cfg("MAX_ENTRIES_PER_TOKEN_24H", 2))
+    max_rt_loss = float(_cfg("MAX_ROUND_TRIP_LOSS_PCT", 5.0))
+    max_sig_age = float(_cfg("MAX_SIGNAL_AGE_SECONDS", 15.0))
     
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"🔥 Momentum Filter: {mom_display}", callback_data="confirm_toggle_momentum_filter")],
-        [InlineKeyboardButton(f"🚀 Max 5m Pump: {max_pump}%", callback_data="edit_MAX_M5_PUMP_PCT")],
-        [InlineKeyboardButton(f"📊 Min Vol 24h: ${min_vol:,.0f}", callback_data="edit_MIN_24H_VOLUME")],
-        [InlineKeyboardButton(f"🏛️ Min Market Cap: ${min_mc:,.0f}", callback_data="edit_MIN_MARKET_CAP")],
+        [InlineKeyboardButton(f"🔥 Momentum Filter: {mom_display}", callback_data="confirm_toggle_momentum_filter"),
+         InlineKeyboardButton(f"🚀 Max 5m Pump: {max_pump}%", callback_data="edit_MAX_M5_PUMP_PCT")],
+        [InlineKeyboardButton(f"📊 Min Vol 24h: ${min_vol:,.0f}", callback_data="edit_MIN_24H_VOLUME"),
+         InlineKeyboardButton(f"🏛️ Min Market Cap: ${min_mc:,.0f}", callback_data="edit_MIN_MARKET_CAP")],
+        [InlineKeyboardButton(f"⏳ Loss Cooldown: {loss_cd}m", callback_data="edit_TOKEN_COOLDOWN_MINUTES"),
+         InlineKeyboardButton(f"🛑 Max Losses/24h: {max_losses_24h}", callback_data="edit_MAX_ENTRIES_PER_TOKEN_24H")],
+        [InlineKeyboardButton(f"🔄 Max RT Loss: {max_rt_loss}%", callback_data="edit_MAX_ROUND_TRIP_LOSS_PCT"),
+         InlineKeyboardButton(f"⚡ Max Signal Age: {max_sig_age}s", callback_data="edit_MAX_SIGNAL_AGE_SECONDS")],
+        [InlineKeyboardButton(f"🐋 Min Whale Vol: {min_whale_vol} SOL", callback_data="edit_MIN_WHALE_SOL_VOLUME"),
+         InlineKeyboardButton(f"💎 Min Trade Size: {min_trade_sol} SOL", callback_data="edit_MIN_TRADE_SOL")],
         [InlineKeyboardButton(f"⏱️ Discovery Rate: {disc_int}m", callback_data="edit_DISCOVERY_INTERVAL_MINUTES")],
-        [InlineKeyboardButton(f"🐋 Min Whale Vol: {min_whale_vol} SOL", callback_data="edit_MIN_WHALE_SOL_VOLUME")],
-        [InlineKeyboardButton(f"💎 Min Trade Size: {min_trade_sol} SOL", callback_data="edit_MIN_TRADE_SOL")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_main")]
     ])
 
@@ -579,7 +596,7 @@ def _gmgn_keyboard() -> InlineKeyboardMarkup:
 def _ml_keyboard() -> InlineKeyboardMarkup:
     enabled = bool(_cfg("ML_ENGINE", False))
     enabled_display = "ON" if enabled else "OFF"
-    ml_conf = float(_cfg("ML_CONFIDENCE", 45))
+    ml_conf = float(_cfg("ML_CONFIDENCE", 80.0))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🧠 ML Engine: {enabled_display}", callback_data="confirm_toggle_ml_engine")],

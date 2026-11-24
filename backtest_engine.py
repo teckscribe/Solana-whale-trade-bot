@@ -33,17 +33,17 @@ log = logging.getLogger("BacktestEngine")
 @dataclass
 class BacktestConfig:
     """Configuration parameters for backtesting simulation."""
-    initial_capital_usd: float = 25.0
-    allocation_pct: float = 10.0
+    initial_capital_usd: float = 50.0
+    allocation_pct: float = 15.0
     use_fixed_trade_size: bool = True
     fixed_trade_size_usd: float = 10.0
-    take_profit_pct: float = 10.0
-    stop_loss_pct: float = -5.0
+    take_profit_pct: float = 20.0
+    stop_loss_pct: float = -10.0
     trailing_stop_enabled: bool = True
-    trailing_activation_pct: float = 5.0
-    trailing_callback_pct: float = 3.0
+    trailing_activation_pct: float = 8.0
+    trailing_callback_pct: float = 3.5
     fee_pct_per_leg: float = 1.0          # 1% per leg (entry + exit = 2% round trip)
-    fixed_cost_usd: float = 0.16           # Solana base fee + priority + ATA rent
+    fixed_cost_usd: float = 0.01           # Solana base fee + priority + tip (with ATA rent reclaimed)
     max_hold_seconds: int = 1800           # 30 minutes timeout
     filter_whale: Optional[str] = None
     filter_start_time: Optional[str] = None
