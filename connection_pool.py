@@ -194,8 +194,11 @@ async def rpc_call(coro_factory: Callable[[], Coroutine], priority: str = 'norma
         try:
             return await coro_factory()
         except Exception as e:
-            RPC_BUDGET.observe_error()
-            log.error(f"RPC call failed: {e}")
+            if "UnsupportedTransactionVersion" in str(e):
+                log.debug(f"Skipping unsupported transaction version in RPC call: {e}")
+            else:
+                RPC_BUDGET.observe_error()
+                log.error(f"RPC call failed: {e}")
             raise
 
 
