@@ -539,9 +539,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 : (t.duration || '--');
             const exitReason = (t.exit_reason || 'MANUAL').toUpperCase();
 
-            // P&L calculation
-            const pnl = parseFloat(t.real_net_profit_usd !== undefined ? t.real_net_profit_usd : (t.net_profit_usd || t.profit_usd || 0));
-            const pnlPct = entryPrice > 0 ? ((exitPrice - entryPrice) / entryPrice) * 100 : 0;
+            // P&L calculation (prefer verified real fill when non-null, else modeled net_profit_usd / net_profit_percent)
+            const hasRealPnl = t.real_net_profit_usd !== undefined && t.real_net_profit_usd !== null;
+            const pnl = parseFloat(hasRealPnl ? t.real_net_profit_usd : (t.net_profit_usd ?? t.profit_usd ?? 0));
+            const hasRealPct = t.real_net_profit_percent !== undefined && t.real_net_profit_percent !== null;
+            const fallbackPct = entryPrice > 0 ? ((exitPrice - entryPrice) / entryPrice) * 100 : 0;
+            const pnlPct = parseFloat(hasRealPct ? t.real_net_profit_percent : (t.net_profit_percent ?? t.profit_pct ?? fallbackPct));
             const isWin = pnl >= 0;
             const pnlBadgeClass = isWin ? 'positive' : 'negative';
             const sign = isWin ? '+' : '';
@@ -1455,7 +1458,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const [name, stats] of Object.entries(budgets)) {
                     const count = stats.count_current_window || 0;
                     const total = stats.total_requests || 0;
-                    const max = name === 'Jupiter' ? 600 : (name === 'DexScreener' ? 300 : 100);
+                    const defaultMax = name === 'Jupiter' ? 600 : (name === 'DexScreener' ? 300 : (name === 'JitoBlockEngine' ? 120 : (name === 'Nansen' ? 60 : (name === 'GeckoTerminal' ? 6 : 100))));
+                    const max = stats.max_requests_per_minute || defaultMax;
                     const pct = Math.min(100, Math.round((count / max) * 100));
 
                     let fillClass = '';

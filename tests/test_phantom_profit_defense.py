@@ -21,12 +21,26 @@ if _WTB_DIR not in sys.path:
     sys.path.insert(0, _WTB_DIR)
 
 import trade_brain
+import settings_manager
+import _settings_sandbox
 from position_state import Position, PositionState
+
+
+def setUpModule():
+    _settings_sandbox.enter()
+
+
+def tearDownModule():
+    _settings_sandbox.exit_()
 
 
 class TestPhantomProfitDefense(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
+        settings_manager.update("ATA_RENT_RECLAIMED", True, source="test")
+        settings_manager.update("PAPER_FEE_PCT_PER_LEG", 1.0, source="test")
+        settings_manager.update("TAKE_PROFIT_PCT", 20.0, source="test")
+        settings_manager.update("STOP_LOSS_PCT", -12.0, source="test")
         trade_brain._refresh_settings()
         trade_brain.STATE.active.clear()
 

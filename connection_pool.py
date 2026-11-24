@@ -115,6 +115,8 @@ class RateBudget:
         """Return statistics for the budget."""
         return {
             "name": self._name,
+            "max_requests_per_minute": self._max,
+            "soft_ceiling": self._soft,
             "count_current_window": self._count,
             "total_requests": self._stats["total_requests"],
             "throttle_events": self._stats["throttle_events"],

@@ -177,6 +177,53 @@ class TestNeutralWhaleScanner(unittest.TestCase):
                     candidates[i+1][1].get("last_active", 0)
                 )
 
+    def test_cross_check_wallet_parameters_rejects_micro_scalpers_and_bribers(self):
+        """Verify Telegram suggestion cross-check blocks low-ROI micro-scalpers and high-fee Jito bribers."""
+        import gmgn_discovery
+        # 1. gtfoTELA-style wallet: 90.9% WR, $3,476 profit, but only 3.39% ROI on $109k volume, 84.7% fee ratio, and 60 sells vs 17 buys
+        gtfo_stats = {
+            "address": "gtfoTELAeEZHUgHetA6umfsCETiBMzJCN4tB2sqCgFL",
+            "winrate_7d": 90.91,
+            "total_trades_7d": 77,
+            "buy_7d": 17,
+            "sell_7d": 60,
+            "token_num_7d": 22,
+            "realized_profit": 3476.14,
+            "roi_pct": 3.39,
+            "bought_cost": 109727.29,
+            "bought_fee": 2944.60,
+            "fee_to_profit_pct": 84.71,
+            "runners_2x_plus": 0,
+            "sol_balance": 59.84,
+            "tags": [],
+        }
+        passed, rejections, _ = gmgn_discovery.cross_check_wallet_parameters(gtfo_stats["address"], gtfo_stats)
+        self.assertFalse(passed)
+        self.assertTrue(any("micro-scalper" in r for r in rejections))
+        self.assertTrue(any("Jito/MEV briber" in r for r in rejections))
+        self.assertTrue(any("Sell/Buy asymmetry" in r for r in rejections))
+
+        # 2. Genuine human swing trader: 70% WR, +20.99% ROI, 1.99% fee ratio, 27 buys / 11 sells, 58.56 SOL
+        clean_stats = {
+            "address": "BxVqJPipyk7Qk9izLny8pwZEMneocz6dzQsWGmiuViSh",
+            "winrate_7d": 70.0,
+            "total_trades_7d": 38,
+            "buy_7d": 27,
+            "sell_7d": 11,
+            "token_num_7d": 16,
+            "realized_profit": 1497.60,
+            "roi_pct": 20.99,
+            "bought_cost": 7424.50,
+            "bought_fee": 29.80,
+            "fee_to_profit_pct": 1.99,
+            "runners_2x_plus": 2,
+            "sol_balance": 58.56,
+            "tags": ["smart_degen"],
+        }
+        passed_clean, rejections_clean, _ = gmgn_discovery.cross_check_wallet_parameters(clean_stats["address"], clean_stats)
+        self.assertTrue(passed_clean, rejections_clean)
+        self.assertEqual(rejections_clean, [])
+
 
 if __name__ == "__main__":
     unittest.main()

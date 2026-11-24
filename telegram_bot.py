@@ -236,14 +236,11 @@ def _trade_pnl(t: dict) -> float:
 
 
 def _analyze_trades() -> str:
-    """Reads ml_training_data.json and active trades to return a statistical summary."""
-    json_path = os.path.join(_BOT_DIR, "ml_training_data.json")
+    """Reads canonical trade history and active trades to return a statistical summary."""
+    from trade_history import load_trade_history
     
     try:
-        data = []
-        if os.path.exists(json_path):
-            with open(json_path, 'r') as f:
-                data = json.load(f)
+        data = load_trade_history()
                 
         real_trades = [t for t in data if t.get("trade_mode", "") != "HISTORICAL"]
         
@@ -325,16 +322,14 @@ def _analyze_trades() -> str:
         return f" <i>Failed to analyze dataset: {e}</i>"
 
 def _get_leaderboard(category="main", page=1) -> tuple[str, __import__('telegram').InlineKeyboardMarkup]:
-    """Reads ml_training_data.json and returns the top/bottom whales and their keyboard."""
-    import json
+    """Reads canonical trade history and returns the top/bottom whales and their keyboard."""
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    json_path = os.path.join(_BOT_DIR, "ml_training_data.json")
-    if not os.path.exists(json_path):
-        return "<i>No trade data found yet.</i>", _main_keyboard()
+    from trade_history import load_trade_history
         
     try:
-        with open(json_path, 'r') as f:
-            data = json.load(f)
+        data = load_trade_history()
+        if not data:
+            return "<i>No trade data found yet.</i>", _main_keyboard()
             
         real_trades = [t for t in data if t.get("trade_mode", "") != "HISTORICAL"]
         
@@ -542,7 +537,8 @@ def _pretrade_keyboard() -> InlineKeyboardMarkup:
     min_vol = float(_cfg("MIN_24H_VOLUME", 50000.0))
     min_mc = float(_cfg("MIN_MARKET_CAP", 50000.0))
     disc_int = int(_cfg("DISCOVERY_INTERVAL_MINUTES", 10))
-    min_whale_vol = float(_cfg("MIN_TRADE_SOL", 0.02))
+    min_whale_vol = float(_cfg("MIN_WHALE_SOL_VOLUME", 1.0))
+    min_trade_sol = float(_cfg("MIN_TRADE_SOL", 0.02))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🔥 Momentum Filter: {mom_display}", callback_data="confirm_toggle_momentum_filter")],
@@ -550,24 +546,31 @@ def _pretrade_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(f"📊 Min Vol 24h: ${min_vol:,.0f}", callback_data="edit_MIN_24H_VOLUME")],
         [InlineKeyboardButton(f"🏛️ Min Market Cap: ${min_mc:,.0f}", callback_data="edit_MIN_MARKET_CAP")],
         [InlineKeyboardButton(f"⏱️ Discovery Rate: {disc_int}m", callback_data="edit_DISCOVERY_INTERVAL_MINUTES")],
-        [InlineKeyboardButton(f"🐋 Min Whale Vol: {min_whale_vol} SOL", callback_data="edit_MIN_TRADE_SOL")],
+        [InlineKeyboardButton(f"🐋 Min Whale Vol: {min_whale_vol} SOL", callback_data="edit_MIN_WHALE_SOL_VOLUME")],
+        [InlineKeyboardButton(f"💎 Min Trade Size: {min_trade_sol} SOL", callback_data="edit_MIN_TRADE_SOL")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_main")]
     ])
 
 def _gmgn_keyboard() -> InlineKeyboardMarkup:
     enabled = bool(_cfg("GMGN_DISCOVERY_ENABLED", True))
     enabled_display = "ON" if enabled else "OFF"
-    winrate = float(_cfg("GMGN_MIN_WINRATE", 70.0))
-    min_trades = int(_cfg("GMGN_MIN_TRADES", 10))
-    gmgn_max = int(_cfg("GMGN_MAX_TRADES_7D", 100))
+    winrate = float(_cfg("GMGN_MIN_WINRATE", 45.0))
+    min_trades = int(_cfg("GMGN_MIN_TRADES", 5))
+    gmgn_max = int(_cfg("GMGN_MAX_TRADES_7D", 200))
+    min_sol = float(_cfg("GMGN_MIN_SOL_BALANCE", 1.0))
+    min_roi = float(_cfg("GMGN_MIN_ROI_PCT", 8.0))
+    max_fee_ratio = float(_cfg("GMGN_MAX_FEE_TO_PROFIT_PCT", 25.0))
     gmgn_sol = float(_cfg("LIVE_FEE_RESERVE_SOL", 0.01))
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🟢 GMGN Discovery: {enabled_display}", callback_data="confirm_toggle_gmgn_discovery")],
-        [InlineKeyboardButton(f"🏆 Min Winrate: {winrate}%", callback_data="edit_GMGN_MIN_WINRATE")],
-        [InlineKeyboardButton(f"🔢 Min Trades: {min_trades}", callback_data="edit_GMGN_MIN_TRADES")],
-        [InlineKeyboardButton(f"⏱️ Max Trades 7D: {gmgn_max}", callback_data="edit_GMGN_MAX_TRADES_7D")],
-        [InlineKeyboardButton(f"💰 Fee Reserve: {gmgn_sol} SOL", callback_data="edit_LIVE_FEE_RESERVE_SOL")],
+        [InlineKeyboardButton(f"🏆 Min Winrate: {winrate}%", callback_data="edit_GMGN_MIN_WINRATE"),
+         InlineKeyboardButton(f"📈 Min 7D ROI: {min_roi}%", callback_data="edit_GMGN_MIN_ROI_PCT")],
+        [InlineKeyboardButton(f"🔢 Min Trades: {min_trades}", callback_data="edit_GMGN_MIN_TRADES"),
+         InlineKeyboardButton(f"⏱️ Max Trades 7D: {gmgn_max}", callback_data="edit_GMGN_MAX_TRADES_7D")],
+        [InlineKeyboardButton(f"💎 Min Wallet SOL: {min_sol} SOL", callback_data="edit_GMGN_MIN_SOL_BALANCE"),
+         InlineKeyboardButton(f"⛽ Max Fee/PnL: {max_fee_ratio}%", callback_data="edit_GMGN_MAX_FEE_TO_PROFIT_PCT")],
+        [InlineKeyboardButton(f"💰 Live Fee Reserve: {gmgn_sol} SOL", callback_data="edit_LIVE_FEE_RESERVE_SOL")],
         [InlineKeyboardButton("🚫 Edit Banned Tags", callback_data="edit_GMGN_BANNED_TAGS")],
         [InlineKeyboardButton("🏋️ Run GMGN ML Training", callback_data="run_ml_training")],
         [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_main")]
@@ -757,14 +760,9 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             try:
                 import whale_manager
                 tracked_count = len(whale_manager.get_active_whales())
-            except:
+                db_count = whale_manager.get_total_whales()
+            except Exception:
                 tracked_count = 0
-                
-            try:
-                import json
-                with open(os.path.join(_BOT_DIR, "whale_db.json"), "r") as f:
-                    db_count = len(json.load(f))
-            except:
                 db_count = 0
                 
             mom = bool(_cfg("MOMENTUM_FILTER_ENABLED", False))
@@ -878,7 +876,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             )
 
         elif data.startswith("add_wl_") or data.startswith("setwl_"):
-            wallet = data.split("_")[2] if "add_wl_" in data else data.replace("setwl_", "")
+            wallet = data.replace("add_wl_", "").replace("setwl_", "")
             kb = [
                 [InlineKeyboardButton("✅ Proceed", callback_data=f"confirm_wl_{wallet}")],
                 [InlineKeyboardButton("❌ Cancel", callback_data="delete_msg")]
@@ -895,16 +893,36 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         elif data.startswith("confirm_wl_"):
             wallet = data.replace("confirm_wl_", "")
             try:
+                import asyncio
                 import whale_manager
+                from gmgn_discovery import cross_check_wallet_parameters
+                passed, rejections, stats = await asyncio.to_thread(cross_check_wallet_parameters, wallet)
+                if not passed:
+                    rej_lines = "\n".join(f"• {r}" for r in rejections)
+                    await query.edit_message_text(
+                        f"🛑 <b>Whitelist Blocked by Parameter Cross-Check</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Wallet: <code>{wallet}</code>\n\n"
+                        f"<b>Failed Criteria:</b>\n{rej_lines}",
+                        parse_mode="HTML",
+                    )
+                    return
+                whale_manager.add_whales({wallet})
                 if whale_manager.set_whale_status(wallet, "WHITELIST"):
-                    await query.edit_message_text(f"✅ Successfully added <code>{wallet}</code> to Whitelist!", parse_mode="HTML")
+                    await query.edit_message_text(
+                        f"✅ <b>Verified & Whitelisted!</b>\n"
+                        f"<code>{wallet}</code>\n"
+                        f"7D WR: {stats.get('winrate_7d', 0):.1f}% | ROI: {stats.get('roi_pct', 0):+.1f}% | "
+                        f"SOL: {stats.get('sol_balance', 0):.2f} | AI Score: {stats.get('ai_score', 'N/A')}",
+                        parse_mode="HTML",
+                    )
                 else:
                     await query.edit_message_text("❌ Wallet not found in database.", parse_mode="HTML")
             except Exception as e:
                 await query.edit_message_text(f"❌ Error: {e}", parse_mode="HTML")
 
         elif data.startswith("rem_wl_"):
-            wallet = data.split("_")[2]
+            wallet = data.replace("rem_wl_", "")
             try:
                 import whale_manager
                 if whale_manager.set_whale_status(wallet, "NEUTRAL"):
@@ -1103,8 +1121,9 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             _waiting_for.pop(cid, None)
             try:
                 import subprocess
+                import sys
                 # Run the GMGN ML data generator script in the background
-                subprocess.Popen(["python3", "generate_ml_data.py"])
+                subprocess.Popen([sys.executable, "generate_ml_data.py"])
                 await query.edit_message_text("🏃 <b>Starting GMGN ML Training in background...</b>\n\nDownloading historical trades and recalculating AI weights. This will take a few minutes. You will receive a notification when it's done!", parse_mode="HTML", reply_markup=_main_keyboard())
             except Exception as e:
                 await query.edit_message_text(f"❌ Failed to start ML Training: {e}", reply_markup=_main_keyboard())
@@ -1170,12 +1189,33 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         elif data.startswith("gmgn_approve_"):
             wallet = data.replace("gmgn_approve_", "")
             try:
+                import asyncio
                 import whale_manager
-                from gmgn_discovery import mark_wallet_approved
+                from gmgn_discovery import mark_wallet_approved, mark_wallet_rejected, cross_check_wallet_parameters
+                passed, rejections, stats = await asyncio.to_thread(cross_check_wallet_parameters, wallet)
+                if not passed:
+                    mark_wallet_rejected(wallet)
+                    rej_lines = "\n".join(f"• {r}" for r in rejections)
+                    await query.edit_message_text(
+                        f"🛑 <b>Approval Blocked by Parameter Cross-Check</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Wallet: <code>{wallet}</code>\n\n"
+                        f"<b>Failed Criteria:</b>\n{rej_lines}",
+                        parse_mode="HTML",
+                        reply_markup=_main_keyboard(),
+                    )
+                    return
                 whale_manager.add_whales({wallet})
                 whale_manager.set_whale_status(wallet, "WHITELIST")
                 mark_wallet_approved(wallet)
-                await query.edit_message_text(f"✅ Approved and whitelisted {wallet[:4]}..{wallet[-4:]}", reply_markup=_main_keyboard())
+                await query.edit_message_text(
+                    f"✅ <b>Verified & Whitelisted!</b>\n"
+                    f"<code>{wallet[:6]}...{wallet[-4:]}</code>\n"
+                    f"7D WR: {stats.get('winrate_7d', 0):.1f}% | ROI: {stats.get('roi_pct', 0):+.1f}% | "
+                    f"SOL: {stats.get('sol_balance', 0):.2f} | AI Score: {stats.get('ai_score', 'N/A')}",
+                    parse_mode="HTML",
+                    reply_markup=_main_keyboard(),
+                )
             except Exception as e:
                 log.error(f"Error approving wallet: {e}")
                 

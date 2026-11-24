@@ -69,43 +69,59 @@ def main():
     )
 
     profiles = []
+    from gmgn_discovery import cross_check_wallet_parameters
     for idx, (w, info) in enumerate(candidates, 1):
         try:
-            profile = scanner.fetch_wallet_profile(w, use_cache=True, deep_scan=True, rate_sleep=1.0)
-            profiles.append(profile)
+            profile = scanner.fetch_wallet_profile(w, use_cache=True, deep_scan=False, rate_sleep=1.5)
+            s7 = profile.get("7d", {})
+            if not s7:
+                continue
+            passed, rejections, stats = cross_check_wallet_parameters(w, {
+                "address": w,
+                "winrate_7d": float(s7.get("winrate", 0.0) or 0.0),
+                "total_trades_7d": int(s7.get("trades", 0) or 0),
+                "buy_7d": int(s7.get("buy", 0) or 0),
+                "sell_7d": int(s7.get("sell", 0) or 0),
+                "token_num_7d": int(s7.get("token_num", 0) or 0),
+                "realized_profit": float(s7.get("realized", 0.0) or 0.0),
+                "roi_pct": float(s7.get("roi_pct", 0.0) or 0.0),
+                "bought_cost": float(s7.get("bought_cost", 0.0) or 0.0),
+                "bought_fee": float(s7.get("bought_fee", 0.0) or 0.0),
+                "fee_to_profit_pct": float(s7.get("fee_to_profit_pct", 0.0) or 0.0),
+                "runners_2x_plus": int(s7.get("runners_2x_plus", 0) or 0),
+                "sol_balance": float(profile.get("native_balance", s7.get("native_balance", 0.0)) or 0.0),
+                "tags": list(profile.get("tags", s7.get("tags", [])) or []),
+                "raw_7d": s7,
+            })
+            profile["passed_filters"] = passed
+            profile["rejections"] = rejections
+            profile["alpha_score"] = float(stats.get("ai_score", 0.0) or 0.0)
+            profile["winrate_7d"] = float(s7.get("winrate", 0.0) or 0.0)
+            profile["trades_7d"] = int(s7.get("trades", 0) or 0)
+            profile["realized_7d"] = float(s7.get("realized", 0.0) or 0.0)
+            if status_target == "WHITELIST" or passed:
+                profiles.append(profile)
         except Exception:
             pass
 
-    # Filter and rank
-    ranked = scanner.rank_and_filter_whales(
+    ranked = sorted(
         profiles,
-        min_wr=args.min_wr,
-        min_trades=3,
-        min_profit=args.min_profit,
-        max_trades=300,
-        filter_banned_tags=True
+        key=lambda x: (
+            bool(x.get("passed_filters")),
+            float(x.get("alpha_score", 0.0) or 0.0),
+            float((x.get("7d") or {}).get("roi_pct", 0.0) or 0.0),
+            float(x.get("realized_7d", 0.0) or 0.0),
+        ),
+        reverse=True,
     )
-
-    # If no whales passed strict filter, fallback to any wallets with positive profit or trades
-    if not ranked:
-        for p in profiles:
-            s7d = p.get("7d", {})
-            if s7d.get("trades", 0) > 0:
-                p["alpha_score"] = s7d.get("winrate", 0)
-                p["winrate_7d"] = s7d.get("winrate", 0)
-                p["trades_7d"] = s7d.get("trades", 0)
-                p["realized_7d"] = s7d.get("realized", 0.0)
-                ranked.append(p)
-        ranked.sort(key=lambda x: (x.get("winrate_7d", 0), x.get("realized_7d", 0)), reverse=True)
-
-    # Save to disk
-    if ranked:
-        scanner.export_ranked_json(ranked)
 
     top_results = ranked[:args.top]
 
     if not top_results:
-        send_message(f"Scan complete. No active {status_target} whales with trade history found.")
+        send_message(
+            f"🛡️ <b>{status_target} Scan Complete</b>\n"
+            f"Evaluated {len(candidates)} candidates — 0 wallets passed all configured safety & ROI parameters."
+        )
         return
 
     # Build Telegram Message in chunks of 10
@@ -128,17 +144,23 @@ def main():
             w = r.get("wallet", "")
             w_short = f"{w[:4]}...{w[-4:]}"
 
-            s1d = r.get("1d", {})
             s7d = r.get("7d", {})
-            s30d = r.get("30d", {})
             sol_bal = r.get("native_balance", 0.0)
             score = r.get("alpha_score", 0.0)
+            roi_pct = float(s7d.get("roi_pct", 0.0) or 0.0)
+            fee_ratio = float(s7d.get("fee_to_profit_pct", 0.0) or 0.0)
+            runners_2x = int(s7d.get("runners_2x_plus", 0) or 0)
 
             sign7d = "+" if s7d.get("realized", 0) >= 0 else ""
             msg_lines.append(f"<b>{i}. <code>{w}</code></b>")
-            msg_lines.append(f"  • <b>7d:</b>  WR {s7d.get('winrate', 0):.0f}% | {s7d.get('trades', 0)} trds | {sign7d}${s7d.get('realized', 0):,.0f}")
-            msg_lines.append(f"  • <b>30d:</b> WR {s30d.get('winrate', 0):.0f}% | {s30d.get('trades', 0)} trds | ${s30d.get('realized', 0):,.0f}")
-            msg_lines.append(f"  • <b>SOL:</b> {sol_bal:.2f} SOL | <b>Score:</b> {score:.1f}")
+            msg_lines.append(
+                f"  • <b>7D:</b> WR {s7d.get('winrate', 0):.0f}% | {s7d.get('trades', 0)} swaps | "
+                f"{sign7d}${s7d.get('realized', 0):,.0f} (<b>ROI {roi_pct:+.1f}%</b>)"
+            )
+            msg_lines.append(
+                f"  • <b>SOL:</b> {sol_bal:.2f} | <b>2x+ Runners:</b> {runners_2x} | "
+                f"<b>Fee/PnL:</b> {fee_ratio:.1f}% | <b>AI Score:</b> {score:.0f}"
+            )
             msg_lines.append("")
 
             # Action buttons

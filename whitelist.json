@@ -1,444 +1,116 @@
 {
-  "3NRzXAZhkDwiq2aXSKJnY4QZnremVQfwtsMmoh4tYQoJ": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1790340526.5779068,
+  "BxVqJPipyk7Qk9izLny8pwZEMneocz6dzQsWGmiuViSh": {
+    "discovered_at": 1795497086.23274,
+    "last_active": 1795497086.23274,
     "status": "WHITELIST",
-    "alpha_score": 130.0,
-    "winrate_7d": 60.0,
-    "profit_7d": 30547.47,
-    "trades_7d": 146,
+    "score": 80,
+    "winrate_7d": 70.0,
+    "trades_7d": 38,
+    "realized_7d": 1497.62,
+    "native_balance": 58.559,
+    "tags": [
+      "smart_degen"
+    ],
+    "discovery_sources": [
+      "gmgn",
+      "dexscreener"
+    ],
+    "note": "Verified active funded alpha (Score 80, WR 70.0%, 58.6 SOL)",
+    "realized_profit": 1497.62,
+    "winrate": 70.0,
+    "trades": 38
+  },
+  "DgVqgyw4QuaktN5bvxauKJVCZBDGeiWn1mo6XmaYbLaD": {
+    "discovered_at": 1795497086.265998,
+    "last_active": 1795497086.265998,
+    "status": "WHITELIST",
+    "score": 70,
+    "winrate_7d": 45.45,
+    "trades_7d": 78,
+    "realized_7d": 2093.0,
+    "native_balance": 40.815,
     "tags": [
       "smart_degen",
       "gmgn"
-    ]
+    ],
+    "discovery_sources": [
+      "gmgn",
+      "dexscreener"
+    ],
+    "note": "Verified active funded alpha (Score 70, WR 45.5%, 40.8 SOL)",
+    "realized_profit": 2093.0,
+    "winrate": 45.45,
+    "trades": 78
   },
-  "GqanDXxavK8VCV2qSZ7pS7FUUNh58j22rwjTCtBtm88o": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1790698190.3752031,
+  "8cmGffUSgwt4k7hNbBBAaY7tXW1M8AHPB2YHUYdZE1aU": {
+    "discovered_at": 1795497086.2972903,
+    "last_active": 1795497086.2972903,
     "status": "WHITELIST",
-    "alpha_score": 115.03,
-    "winrate_7d": 58.3,
-    "profit_7d": 18349.74,
-    "trades_7d": 165,
+    "score": 55,
+    "winrate_7d": 48.39,
+    "trades_7d": 172,
+    "realized_7d": 2420.45,
+    "native_balance": 60.31,
     "tags": [
       "smart_degen"
-    ]
-  },
-  "23smoGAtYeEHjdbyXUSZFWkEjP8oDf92UwNnnXp1a91w": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1790698057.5669858,
-    "status": "WHITELIST",
-    "alpha_score": 113.46,
-    "winrate_7d": 56.5,
-    "profit_7d": 18470.54,
-    "trades_7d": 175,
-    "tags": [
-      "smart_degen"
-    ]
-  },
-  "EEQCmGFfy3eG5daqopCRrvaNZvxL5ngHzQS7dT1RF8Zf": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789707012.2777407,
-    "status": "WHITELIST",
-    "alpha_score": 108.29,
-    "winrate_7d": 100.0,
-    "profit_7d": 1642.91,
-    "trades_7d": 10,
-    "tags": []
-  },
-  "6orhR9PVUbft2ZRW8XJBQdJt7M1Txeky6GVdxVzRn82v": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789707012.2777407,
-    "status": "WHITELIST",
-    "alpha_score": 107.8,
-    "winrate_7d": 100.0,
-    "profit_7d": 648.0,
-    "trades_7d": 13,
-    "tags": []
-  },
-  "CKGNk9gW7uGrB5gZrKEdck87wn5bhEgJsBYcaWEVb55r": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789707012.2777407,
-    "status": "WHITELIST",
-    "alpha_score": 107.3,
-    "winrate_7d": 100.0,
-    "profit_7d": 1149.16,
-    "trades_7d": 10,
-    "tags": []
-  },
-  "Fsf6XcjqvQEhoJ5psn3Fp7ypKZw3h1UwwUP5fQDQYKQj": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789707012.2777407,
-    "status": "WHITELIST",
-    "alpha_score": 103.75,
-    "winrate_7d": 100.0,
-    "profit_7d": 376.26,
-    "trades_7d": 6,
-    "tags": []
-  },
-  "GYhyuXggpazFya7YAVYQtyUvRmJTfzkeJCskmXERXQ1D": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789707012.2777407,
-    "status": "WHITELIST",
-    "alpha_score": 103.44,
-    "winrate_7d": 100.0,
-    "profit_7d": 718.56,
-    "trades_7d": 4,
-    "tags": []
-  },
-  "BcGwoos5GGmkC5UNcTdvV8CqiDkY9ij5YqTW2SwwfoPe": {
-    "discovered_at": 1789707012.2777407,
-    "last_active": 1789707012.2777407,
-    "status": "WHITELIST",
-    "alpha_score": 102.81,
-    "winrate_7d": 100.0,
-    "profit_7d": 655.84,
-    "trades_7d": 3,
-    "tags": []
+    ],
+    "discovery_sources": [
+      "gmgn",
+      "dexscreener"
+    ],
+    "note": "Verified active funded alpha (Score 55, WR 48.4%, 60.3 SOL)",
+    "realized_profit": 2420.45,
+    "winrate": 48.39,
+    "trades": 172
   },
   "FNeVJWWsSDoXvmL7CEFrxo7nThBbvz14hWPEG3z3qeT2": {
     "discovered_at": 1789707012.2787077,
-    "last_active": 1790698178.571114,
+    "last_active": 1794509861.751626,
     "status": "WHITELIST",
     "alpha_score": 101.33,
-    "winrate_7d": 55.6,
+    "winrate_7d": 55.56,
     "profit_7d": 12887.33,
     "trades_7d": 88,
     "tags": [
       "smart_degen"
-    ]
-  },
-  "BumkaFdBaQp4TBCbgtLzMfS7nJALjBfEyyXmGrWZAtzL": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1790369347.6829593,
-    "status": "WHITELIST",
-    "alpha_score": 155.22,
-    "winrate_7d": 100.0,
-    "profit_7d": 17611.02,
-    "trades_7d": 40,
-    "tags": []
-  },
-  "8km1baLbEpaW9ZUSF7UwkyjspfGHjSgKE78mK7zXnqW1": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 128.25,
-    "winrate_7d": 100.0,
-    "profit_7d": 5625.99,
-    "trades_7d": 34,
-    "tags": []
-  },
-  "BE4jTxzVqJckkiQ1n1A8ELNfenzu7UNw4cChWiHkAKCb": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 125.38,
-    "winrate_7d": 100.0,
-    "profit_7d": 2691.35,
-    "trades_7d": 44,
-    "tags": []
-  },
-  "9D9pGaHrXxGjAsjQEdn4uXpJuCHXxf18pmDJWzLrrXw8": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 124.44,
-    "winrate_7d": 100.0,
-    "profit_7d": 2217.9,
-    "trades_7d": 42,
-    "tags": []
-  },
-  "BikvfWSsiCKf16z4TfsWtatt73JVHChJouyL8rDh6uG8": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 122.52,
-    "winrate_7d": 100.0,
-    "profit_7d": 1260.12,
-    "trades_7d": 49,
-    "tags": []
-  },
-  "FBcdJdiy3iEEtGQbneu7uDKeqNV8CRjSCmPuZD4kMUhX": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 121.95,
-    "winrate_7d": 100.0,
-    "profit_7d": 2222.88,
-    "trades_7d": 35,
-    "tags": []
-  },
-  "3tMwy8RpGGQSmxLJFJfGikdv1xzwvAk4Q5QEQVnGTsro": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 121.88,
-    "winrate_7d": 100.0,
-    "profit_7d": 941.29,
-    "trades_7d": 46,
-    "tags": []
-  },
-  "8ju7WntcHzoc9uFfvEGMHLVk3N1TS3MSB3p9vRU7eNdH": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 121.53,
-    "winrate_7d": 100.0,
-    "profit_7d": 2264.11,
-    "trades_7d": 34,
-    "tags": []
-  },
-  "6BKeq5SX7ahVttRYx72ohRVDi8mcmxsX8gLcvbTU73FF": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 121.46,
-    "winrate_7d": 100.0,
-    "profit_7d": 729.87,
-    "trades_7d": 42,
-    "tags": []
-  },
-  "FrmgxEsq7RjCttKSXLSJvJAYvbucC6GuAcCm6iqyMKj7": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 121.38,
-    "winrate_7d": 100.0,
-    "profit_7d": 689.07,
-    "trades_7d": 58,
-    "tags": []
-  },
-  "3Mv1gMJDzTn5uuss11bYq4C9dLoUJC1gorn5J3DYpw9h": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 121.1,
-    "winrate_7d": 100.0,
-    "profit_7d": 547.54,
-    "trades_7d": 66,
-    "tags": []
-  },
-  "DkxMys3jfNRM4TLjAmo9YjpQjtn3uK48Hs8ECC8tYvTU": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 119.59,
-    "winrate_7d": 100.0,
-    "profit_7d": 1543.87,
-    "trades_7d": 33,
-    "tags": []
-  },
-  "9TR5qhUnoHUe9BE9fhyHuHzVPacuxJDFGF55hsuCNa2w": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 118.14,
-    "winrate_7d": 100.0,
-    "profit_7d": 571.0,
-    "trades_7d": 34,
-    "tags": []
-  },
-  "FGd1xce1nZ97k9SQEcbWtN5rMq9yuhYSTZz3CwSRRySR": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 118.11,
-    "winrate_7d": 100.0,
-    "profit_7d": 555.3,
-    "trades_7d": 34,
-    "tags": []
-  },
-  "4mtzY81Z3DxksKihLcDJkbBD3tSfwfcMT9n1Mzr4v8Cp": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 117.6,
-    "winrate_7d": 100.0,
-    "profit_7d": 2048.39,
-    "trades_7d": 27,
-    "tags": []
-  },
-  "9XHojTgZgVaoQteFY1cTY7wAymARvtXficEszNnaUejB": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 117.34,
-    "winrate_7d": 100.0,
-    "profit_7d": 2168.8,
-    "trades_7d": 26,
-    "tags": []
-  },
-  "3bVSJFiwnYSZ3JnaeRm6DVYNGVmWGVz74ppXfAtHEDbb": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 117.15,
-    "winrate_7d": 100.0,
-    "profit_7d": 1576.53,
-    "trades_7d": 28,
-    "tags": []
-  },
-  "5qDo63wk8jgajVuxsGDmvNzTy7zpR9jpdasxGPrTUk4R": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 116.42,
-    "winrate_7d": 100.0,
-    "profit_7d": 2958.81,
-    "trades_7d": 21,
-    "tags": []
-  },
-  "EPVRKbsxvxnL2W582qXEcuPSqsBtzusqSbj23zwFABgZ": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 116.29,
-    "winrate_7d": 100.0,
-    "profit_7d": 1396.95,
-    "trades_7d": 27,
-    "tags": []
-  },
-  "3o6fL4bDxnKourCikX13xDRKFwa9SFzA6wGp2VTYXyWQ": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 114.68,
-    "winrate_7d": 100.0,
-    "profit_7d": 842.16,
-    "trades_7d": 26,
-    "tags": []
-  },
-  "7QzcsCk5c9cLVf5W1vzEBwJ2vWDiLnA6ySYFxivNsXrg": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 113.57,
-    "winrate_7d": 100.0,
-    "profit_7d": 1037.46,
-    "trades_7d": 23,
-    "tags": []
-  },
-  "4ZKhvUwpSgpVhYFwHfkoVKn7gMmYpS5ovxr4Zi5qjfcB": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 113.33,
-    "winrate_7d": 100.0,
-    "profit_7d": 665.41,
-    "trades_7d": 24,
-    "tags": []
-  },
-  "99wx1wsmSpPhNg2gwDarvmYdoF57YDDjKLBF8Mawq1su": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 112.81,
-    "winrate_7d": 100.0,
-    "profit_7d": 654.73,
-    "trades_7d": 23,
-    "tags": []
-  },
-  "CtXTohdV2SfBKmnJJYZS8BWjJQY7VLDJ5yB9Mw1hpwor": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 112.44,
-    "winrate_7d": 100.0,
-    "profit_7d": 718.13,
-    "trades_7d": 22,
-    "tags": []
-  },
-  "J2RS9gFJDUZX1B13haaFpziNYPChcFidF7fESXSvAiL2": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 112.4,
-    "winrate_7d": 100.0,
-    "profit_7d": 1449.5,
-    "trades_7d": 19,
-    "tags": []
-  },
-  "AuswVnP9KqxA55Jd46qyH5KkstUQ1CQmioxdtwNb3keR": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 112.28,
-    "winrate_7d": 100.0,
-    "profit_7d": 889.65,
-    "trades_7d": 21,
-    "tags": []
-  },
-  "AMzfpcwtQWctD2WJq9YVQ7ymJ4hmibakFTtRiPbdicbD": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 112.11,
-    "winrate_7d": 100.0,
-    "profit_7d": 803.19,
-    "trades_7d": 21,
-    "tags": []
-  },
-  "6DvDxkj2hpz5KBeVJVEjeGjuJUUtLb1zXUq7XHTyapxK": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 110.79,
-    "winrate_7d": 100.0,
-    "profit_7d": 894.65,
-    "trades_7d": 18,
-    "tags": []
-  },
-  "ANdySMMUkA5Ni5VQj7HJeeLMxxgGkQH6qKooW8d4bCba": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 110.45,
-    "winrate_7d": 100.0,
-    "profit_7d": 723.28,
-    "trades_7d": 18,
-    "tags": []
-  },
-  "D9tWws1RPWDTjfPV98KLmnpNCCxMw1MfGFAa94E4kyAd": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 109.05,
-    "winrate_7d": 100.0,
-    "profit_7d": 1525.15,
-    "trades_7d": 12,
-    "tags": []
-  },
-  "6RHwx1SrmJBt7w4yKVSwmiNug736rCiqo6fmz4vWfZfT": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 107.2,
-    "winrate_7d": 100.0,
-    "profit_7d": 851.78,
-    "trades_7d": 11,
-    "tags": []
-  },
-  "8UtsUVtWT62KtxZQLZvu94GhkXJVq7dosjvPMdY6tnq8": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1789707012.2787077,
-    "status": "WHITELIST",
-    "alpha_score": 105.8,
-    "winrate_7d": 100.0,
-    "profit_7d": 651.56,
-    "trades_7d": 9,
-    "tags": []
-  },
-  "HEnrSgd4MSMFguBcARMv2FQVQBomT8TLqyYJuR7iBaHW": {
-    "discovered_at": 1789707012.2787077,
-    "last_active": 1790245986.5556114,
-    "status": "WHITELIST",
-    "alpha_score": 100.55,
-    "winrate_7d": 77.8,
-    "profit_7d": 1384.5,
-    "trades_7d": 169,
-    "tags": [
-      "gmgn_go",
+    ],
+    "demoted_at": 1795431649.6493344,
+    "demotion_reason": "No recent verified profitable profile; removed from active whitelist during 2026-11-23 reconciliation",
+    "score": 80,
+    "realized_7d": 12887.33,
+    "native_balance": 35.839,
+    "discovery_sources": [
+      "dex_onchain",
       "gmgn"
-    ]
+    ],
+    "note": "Verified active funded alpha (Score 80, WR 55.6%, 35.8 SOL)",
+    "realized_profit": 12887.33,
+    "winrate": 55.56,
+    "trades": 88
+  },
+  "GqanDXxavK8VCV2qSZ7pS7FUUNh58j22rwjTCtBtm88o": {
+    "discovered_at": 1789707012.2777407,
+    "last_active": 1794509861.7532597,
+    "status": "WHITELIST",
+    "alpha_score": 115.03,
+    "winrate_7d": 58.33,
+    "profit_7d": 18349.74,
+    "trades_7d": 165,
+    "tags": [
+      "smart_degen"
+    ],
+    "demoted_at": 1795431649.6493344,
+    "demotion_reason": "No recent verified profitable profile; removed from active whitelist during 2026-11-23 reconciliation",
+    "score": 65,
+    "realized_7d": 18349.74,
+    "native_balance": 3.191,
+    "discovery_sources": [
+      "dex_onchain",
+      "gmgn"
+    ],
+    "note": "Verified active funded alpha (Score 65, WR 58.3%, 3.2 SOL)",
+    "realized_profit": 18349.74,
+    "winrate": 58.33,
+    "trades": 165
   }
 }

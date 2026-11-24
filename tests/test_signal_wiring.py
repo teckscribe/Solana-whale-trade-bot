@@ -70,6 +70,13 @@ class _RecordTradeBase(unittest.TestCase):
         STATE.exit_requests.clear()
         STATE.recent_buy_signals.clear()
         STATE.processing_tokens.clear()
+        STATE.token_cooldown_until.clear()
+        STATE.token_entry_timestamps.clear()
+        STATE.token_loss_timestamps.clear()
+        STATE.token_consecutive_losses.clear()
+        STATE.daily_realized_pnl_usd = 0.0
+        STATE.daily_pnl_date = ""
+        STATE.signal_journal_buffer.clear()
         self._patches = [
             mock.patch.object(trade_brain, "init_json", lambda: None),
             mock.patch("whale_manager.get_whale_status", lambda w: "WHITELIST"),
@@ -184,6 +191,82 @@ class TestPaperRefund(_RecordTradeBase):
             }))
         self.assertEqual(STATE.wallet_balance, 100.0)
         self.assertNotIn(TOKEN, STATE.active)
+
+
+class TestCooldownAndCircuitBreaker(_RecordTradeBase):
+    def test_token_cooldown_blocks_immediate_reentry(self):
+        now = 1_700_000_000.0
+        # 1st loss: 2-minute anti-whipsaw pause (overridden by multi-whale consensus)
+        STATE.register_token_exit(TOKEN, cooldown_minutes=15, now_ts=now, net_profit_usd=-1.0)
+        blocked, reason = STATE.is_token_on_cooldown(TOKEN, now_ts=now + 30.0, max_entries_24h=2)
+        self.assertTrue(blocked)
+        self.assertIn("cooldown", reason.lower())
+
+        # Multi-whale consensus overrides a single-loss anti-whipsaw pause
+        consensus_blocked, _ = STATE.is_token_on_cooldown(TOKEN, now_ts=now + 30.0, max_entries_24h=2, is_consensus=True)
+        self.assertFalse(consensus_blocked)
+
+        # After 2m (121s), 1st-loss pause expires so bounce re-entries aren't missed
+        blocked_after, _ = STATE.is_token_on_cooldown(TOKEN, now_ts=now + 121.0, max_entries_24h=2)
+        self.assertFalse(blocked_after)
+
+    def test_winning_exits_never_trigger_cooldown_or_cap_and_reset_loss_streak(self):
+        now = 1_700_000_000.0
+        # 1st trade loses (-$1.00) -> streak=1
+        STATE.register_token_exit(TOKEN, cooldown_minutes=15, now_ts=now, net_profit_usd=-1.0)
+        self.assertEqual(STATE.token_consecutive_losses.get(TOKEN), 1)
+
+        # 2nd trade (3m later) wins (+$2.50) -> 0 cooldown, resets streak to 0!
+        STATE.register_token_exit(TOKEN, cooldown_minutes=15, now_ts=now + 180.0, net_profit_usd=2.50)
+        self.assertEqual(STATE.token_consecutive_losses.get(TOKEN), 0)
+
+        # Immediate re-entry 5 seconds after a win is allowed (Wave 2 / Wave 3 runner!)
+        blocked, _ = STATE.is_token_on_cooldown(TOKEN, now_ts=now + 185.0, max_entries_24h=2)
+        self.assertFalse(blocked)
+
+        # Multiple subsequent wins in 24h are never capped
+        for i in range(4):
+            STATE.register_token_exit(TOKEN, cooldown_minutes=15, now_ts=now + 300.0 + i * 60.0, net_profit_usd=1.25)
+            blocked_win, _ = STATE.is_token_on_cooldown(TOKEN, now_ts=now + 305.0 + i * 60.0, max_entries_24h=2)
+            self.assertFalse(blocked_win)
+
+    def test_token_24h_loss_cap_blocks_consecutive_losing_reentries(self):
+        now = 1_700_000_000.0
+        STATE.register_token_exit(TOKEN, cooldown_minutes=15, now_ts=now, net_profit_usd=-1.0)
+        STATE.register_token_exit(TOKEN, cooldown_minutes=15, now_ts=now + 4000.0, net_profit_usd=-1.2)
+        blocked, reason = STATE.is_token_on_cooldown(TOKEN, now_ts=now + 8000.0, max_entries_24h=2)
+        self.assertTrue(blocked)
+        self.assertIn("2/2", reason)
+
+    def test_daily_circuit_breaker_trips_on_excessive_loss(self):
+        STATE.record_daily_pnl(-3.0)
+        tripped, reason = STATE.is_circuit_breaker_tripped(max_daily_loss_pct=5.0, reference_equity=50.0)
+        self.assertTrue(tripped)
+        self.assertIn("circuit breaker", reason.lower())
+
+    def test_stale_buy_signal_rejected_and_journaled(self):
+        called = {"price": False}
+
+        async def fake_price(_):
+            called["price"] = True
+            return (1.0, "TKN", "Token", 1e9, 1e9)
+
+        with mock.patch.object(trade_brain, "get_token_price_usd", fake_price), \
+             mock.patch.object(trade_brain, "MAX_SIGNAL_AGE_SECONDS", 12.0), \
+             mock.patch.object(trade_brain, "WAVE_FILTER_ENABLED", False):
+            run(trade_brain.record_trade({
+                "wallet": WHALE_A,
+                "signature": "stale_sig",
+                "bought": [{"mint": TOKEN, "amount": 100.0}],
+                "sold": [{"mint": SOL, "amount": 0.5}],
+                "signal_age_seconds": 25.4,
+            }))
+
+        self.assertFalse(called["price"], "Stale buy signal must be rejected before pricing API calls")
+        self.assertEqual(len(STATE.signal_journal_buffer), 1)
+        self.assertEqual(STATE.signal_journal_buffer[0]["decision"], "REJECTED")
+        self.assertEqual(STATE.signal_journal_buffer[0]["reason"], "STALE_SIGNAL")
+        self.assertAlmostEqual(STATE.signal_journal_buffer[0]["signal_age_seconds"], 25.4, places=1)
 
 
 if __name__ == "__main__":

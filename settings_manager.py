@@ -67,6 +67,18 @@ SPEC = [
     _s("WAVE_WINDOW_SECONDS", "int", 300, min_val=30, max_val=1800, group="Risk", help_="Time window in seconds to detect multi-wallet entry waves"),
     _s("WAVE_MIN_WALLETS", "int", 2, min_val=2, max_val=10, group="Risk", help_="Minimum whitelisted wallets in a window to trigger wave analysis"),
     _s("WAVE_MAX_BUY_SOL", "float", 0.2, min_val=0.01, max_val=5.0, group="Risk", help_="Maximum individual buy size in SOL to flag as suspicious wave dust"),
+    _s("TOKEN_COOLDOWN_MINUTES", "int", 15, min_val=0, max_val=1440, group="Risk", help_="Post-loss cooldown in minutes after consecutive losses on the same token (0m after winning exits; 2m anti-whipsaw after 1st loss)"),
+    _s("MAX_ENTRIES_PER_TOKEN_24H", "int", 2, min_val=1, max_val=20, group="Risk", help_="Maximum losing exits allowed per token in 24h before locking out re-entries (winning exits are uncapped and reset the loss streak)"),
+    _s("MAX_ROUND_TRIP_LOSS_PCT", "float", 5.0, min_val=0.5, max_val=25.0, group="Risk", help_="Maximum immediate round-trip buy+sell quote loss percentage"),
+    _s("MAX_DAILY_LOSS_PCT", "float", 5.0, min_val=0.5, max_val=50.0, group="Risk", help_="Daily portfolio drawdown circuit breaker percentage"),
+    _s("MAX_SIGNAL_AGE_SECONDS", "float", 15.0, min_val=0.0, max_val=300.0, group="Risk", help_="Maximum age in seconds from on-chain blockTime to accept a buy signal (0 disables)"),
+    _s("MIN_WHALE_SOL_VOLUME", "float", 1.0, min_val=0.01, max_val=1000.0, group="Filter", help_="Minimum whale swap volume in SOL for discovery"),
+    _s("GMGN_MIN_WINRATE", "float", 45.0, min_val=0.0, max_val=100.0, group="Filter", help_="Minimum 7D win rate percentage for GMGN discovery"),
+    _s("GMGN_MIN_TRADES", "int", 5, min_val=1, max_val=500, group="Filter", help_="Minimum 7D trade count for GMGN discovery"),
+    _s("GMGN_MAX_TRADES_7D", "int", 200, min_val=5, max_val=2000, group="Filter", help_="Maximum 7D trade count for GMGN discovery (anti-sniper cap)"),
+    _s("GMGN_MIN_SOL_BALANCE", "float", 1.0, min_val=0.0, max_val=1000.0, group="Filter", help_="Minimum native SOL balance required for GMGN discovery"),
+    _s("GMGN_MIN_ROI_PCT", "float", 8.0, min_val=0.0, max_val=500.0, group="Filter", help_="Minimum 7D realized ROI % on deployed capital (rejects +3% high-volume micro-scalpers)"),
+    _s("GMGN_MAX_FEE_TO_PROFIT_PCT", "float", 25.0, min_val=1.0, max_val=100.0, group="Filter", help_="Maximum buy-side priority/bribe fee as % of 7D realized profit (rejects untagged Jito MEV bribers)"),
 ]
 
 SPEC_BY_KEY = {e["key"]: e for e in SPEC}

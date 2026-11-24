@@ -17,6 +17,7 @@ from jupiter_api import (
     get_token_price_usd, get_live_price, get_sol_price_usd,
     get_token_decimals, get_pool_liquidity_usd,
     price_from_quote, get_executable_price_usd, quote_price_impact_pct,
+    prune_all_caches,
 )
 from gmgn_trader import (
     execute_gmgn_buy, wait_for_order_confirmed,
@@ -57,6 +58,11 @@ WAVE_FILTER_ENABLED = bool(settings_manager.get("WAVE_FILTER_ENABLED"))
 WAVE_WINDOW_SECONDS = int(settings_manager.get("WAVE_WINDOW_SECONDS"))
 WAVE_MIN_WALLETS = int(settings_manager.get("WAVE_MIN_WALLETS"))
 WAVE_MAX_BUY_SOL = float(settings_manager.get("WAVE_MAX_BUY_SOL"))
+TOKEN_COOLDOWN_MINUTES = int(settings_manager.get("TOKEN_COOLDOWN_MINUTES"))
+MAX_ENTRIES_PER_TOKEN_24H = int(settings_manager.get("MAX_ENTRIES_PER_TOKEN_24H"))
+MAX_ROUND_TRIP_LOSS_PCT = float(settings_manager.get("MAX_ROUND_TRIP_LOSS_PCT"))
+MAX_DAILY_LOSS_PCT = float(settings_manager.get("MAX_DAILY_LOSS_PCT"))
+MAX_SIGNAL_AGE_SECONDS = float(settings_manager.get("MAX_SIGNAL_AGE_SECONDS"))
 
 SOL_BASE_TX_FEE = 0.000005
 PRIORITY_FEE_SOL = float(os.getenv("GMGN_PRIORITY_FEE", "0.00001"))
@@ -79,6 +85,7 @@ def _refresh_settings():
     global MAX_PORTFOLIO_EXPOSURE_PCT, POLL_INTERVAL, LIVE_TRADES_FILE, WALLET_FILE
     global TRAILING_STOP_ENABLED, TRAILING_STOP_ACTIVATION_PCT, TRAILING_STOP_CALLBACK_PCT
     global WAVE_FILTER_ENABLED, WAVE_WINDOW_SECONDS, WAVE_MIN_WALLETS, WAVE_MAX_BUY_SOL
+    global TOKEN_COOLDOWN_MINUTES, MAX_ENTRIES_PER_TOKEN_24H, MAX_ROUND_TRIP_LOSS_PCT, MAX_DAILY_LOSS_PCT, MAX_SIGNAL_AGE_SECONDS
     global ATA_RENT_RECLAIMED
     try:
         TRADE_MODE = settings_manager.get("TRADE_MODE")
@@ -107,6 +114,11 @@ def _refresh_settings():
         WAVE_WINDOW_SECONDS = int(settings_manager.get("WAVE_WINDOW_SECONDS"))
         WAVE_MIN_WALLETS = int(settings_manager.get("WAVE_MIN_WALLETS"))
         WAVE_MAX_BUY_SOL = float(settings_manager.get("WAVE_MAX_BUY_SOL"))
+        TOKEN_COOLDOWN_MINUTES = int(settings_manager.get("TOKEN_COOLDOWN_MINUTES"))
+        MAX_ENTRIES_PER_TOKEN_24H = int(settings_manager.get("MAX_ENTRIES_PER_TOKEN_24H"))
+        MAX_ROUND_TRIP_LOSS_PCT = float(settings_manager.get("MAX_ROUND_TRIP_LOSS_PCT"))
+        MAX_DAILY_LOSS_PCT = float(settings_manager.get("MAX_DAILY_LOSS_PCT"))
+        MAX_SIGNAL_AGE_SECONDS = float(settings_manager.get("MAX_SIGNAL_AGE_SECONDS"))
         ATA_RENT_RECLAIMED = bool(settings_manager.get("ATA_RENT_RECLAIMED"))
         POLL_INTERVAL = max(2.0, (60 * MAX_CONCURRENT_TRADES) / 280.0)
 
@@ -171,8 +183,145 @@ class TradingState:
         # Anti-Seeder / Wave Attack tracking (FOMO Radar provenance algorithm)
         self.token_buy_history: Dict[str, list] = {}
         self.seeded_blacklist: set = set()
+        # Per-token outcome-aware cooldown and 24h loss-streak guard
+        self.token_cooldown_until: Dict[str, float] = {}
+        self.token_entry_timestamps: Dict[str, list] = {}
+        self.token_loss_timestamps: Dict[str, list] = {}
+        self.token_consecutive_losses: Dict[str, int] = {}
+        # Daily realized PnL tracking for portfolio max-drawdown circuit breaker
+        self.daily_realized_pnl_usd: float = 0.0
+        self.daily_pnl_date: str = ""
+        # Tracks token mints with an existing ATA so re-entries don't double-pay ATA creation rent
+        self.known_ata_mints: set = set()
+        # Non-blocking RAM buffer for prospective signal & latency journal (flushed to data/signal_journal.jsonl)
+        self.signal_journal_buffer: list = []
         self._load_seeded_blacklist()
         self._lock = asyncio.Lock()
+
+    def record_signal_event(self, event: dict):
+        """Buffers an accepted or rejected signal evaluation in RAM for asynchronous NDJSON journaling."""
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **event,
+        }
+        self.signal_journal_buffer.append(record)
+        if len(self.signal_journal_buffer) > 2000:
+            self.signal_journal_buffer = self.signal_journal_buffer[-1000:]
+
+    def register_token_entry(self, token_address: str, now_ts: Optional[float] = None):
+        """Records a new entry timestamp and marks the token's ATA as known."""
+        ts = float(now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp())
+        entries = self.token_entry_timestamps.setdefault(token_address, [])
+        entries = [t for t in entries if ts - t <= 86400.0]
+        entries.append(ts)
+        self.token_entry_timestamps[token_address] = entries
+        self.known_ata_mints.add(token_address)
+
+    def register_token_exit(
+        self,
+        token_address: str,
+        cooldown_minutes: int = 15,
+        now_ts: Optional[float] = None,
+        net_profit_usd: Optional[float] = None,
+    ):
+        """
+        Outcome-aware exit registration:
+        - Winning exits (net_profit_usd > 0): 0-minute cooldown, resets consecutive loss streak
+          and clears 24h loss lockouts so runner tokens can be re-entered on Wave 2 / Wave 3.
+        - 1st losing exit (streak == 1): short 2-minute anti-whipsaw pause to avoid buying the
+          same dump candle while remaining ready for a quick re-accumulation bounce.
+        - 2+ consecutive losing exits: full cooldown_minutes + counted toward 24h loss cap.
+        """
+        ts = float(now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp())
+        if net_profit_usd is not None and net_profit_usd > 0.0:
+            self.token_cooldown_until.pop(token_address, None)
+            self.token_consecutive_losses[token_address] = 0
+            self.token_loss_timestamps.pop(token_address, None)
+            return
+
+        if net_profit_usd is not None:
+            streak = self.token_consecutive_losses.get(token_address, 0) + 1
+            self.token_consecutive_losses[token_address] = streak
+            losses = [t for t in self.token_loss_timestamps.get(token_address, []) if ts - t <= 86400.0]
+            losses.append(ts)
+            self.token_loss_timestamps[token_address] = losses
+            effective_cd_min = min(cooldown_minutes, 2) if streak == 1 else cooldown_minutes
+        else:
+            effective_cd_min = cooldown_minutes
+
+        if effective_cd_min > 0:
+            self.token_cooldown_until[token_address] = ts + (effective_cd_min * 60.0)
+
+    def is_token_on_cooldown(
+        self,
+        token_address: str,
+        now_ts: Optional[float] = None,
+        max_entries_24h: int = 2,
+        is_consensus: bool = False,
+    ) -> tuple[bool, str]:
+        """
+        Checks whether a token is blocked by a post-loss cooldown or 24h loss-streak cap.
+        Winning trades never trigger cooldown or consume the 24h cap.
+        Multi-whale consensus (is_consensus=True) overrides a single-loss anti-whipsaw pause.
+        """
+        ts = float(now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp())
+        streak = self.token_consecutive_losses.get(token_address, 0)
+
+        if max_entries_24h > 0:
+            losses = [t for t in self.token_loss_timestamps.get(token_address, []) if ts - t <= 86400.0]
+            self.token_loss_timestamps[token_address] = losses
+            if streak >= max_entries_24h or len(losses) >= max_entries_24h:
+                return (
+                    True,
+                    f"Token {token_address[:8]} reached max {len(losses)}/{max_entries_24h} losing exits in 24h (loss streak={streak})",
+                )
+
+        until = self.token_cooldown_until.get(token_address, 0.0)
+        if until > ts:
+            if is_consensus and streak <= 1:
+                return False, ""
+            rem_min = (until - ts) / 60.0
+            return True, f"Token {token_address[:8]} is on post-loss cooldown for another {rem_min:.1f}m"
+
+        return False, ""
+
+    def record_daily_pnl(self, net_profit_usd: float, now_utc: Optional[datetime] = None):
+        """Updates daily realized PnL counter for the portfolio circuit breaker."""
+        dt = now_utc or datetime.now(timezone.utc)
+        day_key = dt.strftime("%Y-%m-%d")
+        if self.daily_pnl_date != day_key:
+            self.daily_pnl_date = day_key
+            self.daily_realized_pnl_usd = 0.0
+        self.daily_realized_pnl_usd += float(net_profit_usd)
+
+    def is_circuit_breaker_tripped(
+        self,
+        max_daily_loss_pct: float,
+        reference_equity: float,
+        now_utc: Optional[datetime] = None,
+    ) -> tuple[bool, str]:
+        """Returns (True, reason) if daily realized + unrealized loss exceeds max_daily_loss_pct."""
+        if max_daily_loss_pct <= 0 or reference_equity <= 0:
+            return False, ""
+        dt = now_utc or datetime.now(timezone.utc)
+        day_key = dt.strftime("%Y-%m-%d")
+        if self.daily_pnl_date != day_key:
+            self.daily_pnl_date = day_key
+            self.daily_realized_pnl_usd = 0.0
+        unrealized = sum(
+            float(pos.profit_usd if isinstance(pos, Position) else pos.get("profit_usd", 0.0))
+            for pos in self.active.values()
+        )
+        total_daily_pnl = self.daily_realized_pnl_usd + unrealized
+        if total_daily_pnl < 0:
+            loss_pct = (abs(total_daily_pnl) / reference_equity) * 100.0
+            if loss_pct >= max_daily_loss_pct:
+                return (
+                    True,
+                    f"Daily circuit breaker tripped: daily loss ${abs(total_daily_pnl):.2f} "
+                    f"({loss_pct:.2f}%) >= {max_daily_loss_pct:.1f}% of ${reference_equity:.2f} equity",
+                )
+        return False, ""
 
     def _save_seeded_blacklist(self):
         try:
@@ -431,12 +580,23 @@ async def flush_all_state_now():
             wallet_init = STATE.initial_balance
             pending_closed = STATE.closed_trades[:]
             STATE.closed_trades.clear()
+            pending_signals = STATE.signal_journal_buffer[:]
+            STATE.signal_journal_buffer.clear()
 
         _save_json_atomic(LIVE_TRADES_FILE, trades_list)
         if TRADE_MODE == "PAPER":
             settings_manager.set_paper_wallet_balance(wallet_bal)
         elif WALLET_FILE:
             _save_json_atomic(WALLET_FILE, {"balance": wallet_bal, "initial": wallet_init})
+
+        if pending_signals:
+            try:
+                os.makedirs("data", exist_ok=True)
+                with open(os.path.join("data", "signal_journal.jsonl"), "a", encoding="utf-8") as sf:
+                    for s_rec in pending_signals:
+                        sf.write(json.dumps(s_rec) + "\n")
+            except Exception as se:
+                log.error(f"Failed to append to data/signal_journal.jsonl on shutdown: {se}")
 
         if pending_closed:
             try:
@@ -468,9 +628,10 @@ async def get_sol_balance() -> int:
     if not LIVE_TRADING_AVAILABLE or not WALLET_PRIVATE_KEY:
         return 0
     try:
-        from connection_pool import get_rpc_client
+        from connection_pool import get_rpc_client, RPC_BUDGET
         keypair = Keypair.from_base58_string(WALLET_PRIVATE_KEY)
         wallet_pubkey = keypair.pubkey()
+        await RPC_BUDGET.acquire(priority="high")
         solana_client = await get_rpc_client()
         resp = await solana_client.get_balance(wallet_pubkey)
         return resp.value
@@ -483,7 +644,8 @@ async def get_spl_token_balance(wallet_pubkey_str: str, token_mint_str: str) -> 
     if not LIVE_TRADING_AVAILABLE or not wallet_pubkey_str or not token_mint_str:
         return -1.0
     try:
-        from connection_pool import get_rpc_client
+        from connection_pool import get_rpc_client, RPC_BUDGET
+        await RPC_BUDGET.acquire(priority="high")
         solana_client = await get_rpc_client()
         resp = await solana_client.get_token_accounts_by_owner_json_parsed(
             Pubkey.from_string(wallet_pubkey_str),
@@ -578,6 +740,8 @@ async def close_gmgn_trade(
     }
 
     # Record in RAM (flushed asynchronously by state flush loop)
+    STATE.register_token_exit(token, cooldown_minutes=TOKEN_COOLDOWN_MINUTES, net_profit_usd=net_profit_usd)
+    STATE.record_daily_pnl(net_profit_usd)
     STATE.record_closed_trade(trade_record)
     send_exit_alert(trade_record)
     return True
@@ -805,11 +969,11 @@ async def monitor_gmgn_position(
         f"GMGN MONITOR: {token[:8]}... | strategy={strategy_order_id or 'N/A (fallback mode)'}"
     )
 
-    # ── Fallback: no strategy_order_id → price-polling + GMGN sell ───────────
-    if not strategy_order_id:
+    # ── Fallback: no strategy_order_id or POLLING_FALLBACK → price-polling + GMGN sell ──
+    if not strategy_order_id or "POLLING" in str(strategy_order_id):
         log.warning(
-            f"GMGN: No strategy_order_id for {token[:8]}. "
-            f"Falling back to price-polling. Sell will use GMGN sell-all (NOT Jupiter)."
+            f"GMGN: No native strategy order for {token[:8]} ({strategy_order_id or 'None'}). "
+            f"Falling back to price-polling with trailing stop & on-chain balance checks."
         )
         last_price = entry_price
         max_profit = 0.0
@@ -833,11 +997,6 @@ async def monitor_gmgn_position(
                 last_balance_check = time.time()
                 bal = await get_spl_token_balance(wallet_address, token)
                 if bal == 0.0:
-                    # GMGN closed this on its own, but the balance going to zero does not say
-                    # WHICH side fired. Labelling it STOP_LOSS unconditionally (as this used to)
-                    # mislabels take-profits as losses and poisons every win-rate stat and any
-                    # future ML training set. Infer from the last observed price instead, and
-                    # mark it as inferred so it can never be mistaken for a confirmed reason.
                     if entry_price > 0 and last_price > 0:
                         move_pct = ((last_price - entry_price) / entry_price) * 100
                         inferred = "TAKE_PROFIT" if move_pct >= 0 else "STOP_LOSS"
@@ -854,6 +1013,22 @@ async def monitor_gmgn_position(
                     )
                     break
 
+            # Panic sell check (triggered by Telegram UI → gmgn_panic.json)
+            if os.path.exists("gmgn_panic.json"):
+                try:
+                    with open("gmgn_panic.json", "r") as f:
+                        panic_data = json.load(f)
+                    if panic_data.get("panic_timestamp", 0) > entry_time.timestamp():
+                        log.warning(f"GMGN: PANIC SELL triggered for {token[:8]}!")
+                        if await _attempt_confirmed_gmgn_sell(
+                            wallet, token, entry_time, entry_price, last_price,
+                            trade_size, "PANIC_SELL", wallet_address,
+                        ):
+                            break
+                        continue
+                except Exception as e:
+                    log.warning(f"GMGN: Failed to read gmgn_panic.json: {e}")
+
             exit_reason = STATE.pop_exit_request(token)
             exit_price = last_price
 
@@ -865,21 +1040,37 @@ async def monitor_gmgn_position(
                 current_price = await get_live_price(token)
                 if current_price > 0:
                     last_price = current_price
-                    profit_pct = ((current_price - entry_price) / entry_price) * 100
-                    if profit_pct > max_profit:
-                        max_profit = profit_pct
-                    async with _dashboard_lock:
-                        if token in _active_trades:
-                            _active_trades[token]["current_price"] = current_price
-                            _active_trades[token]["profit_pct"] = profit_pct
-                            _active_trades[token]["max_profit"] = max_profit
-                            _active_trades[token]["elapsed"] = int(elapsed)
-                    if profit_pct >= TAKE_PROFIT_PCT:
-                        exit_reason = "TAKE_PROFIT"
-                        exit_price = current_price
-                    elif profit_pct <= STOP_LOSS_PCT:
-                        exit_reason = "STOP_LOSS"
-                        exit_price = current_price
+                    pos = STATE.get_position(token)
+                    if isinstance(pos, Position):
+                        pos.elapsed = int(elapsed)
+                        should_exit, trigger = pos.update_price(
+                            current_price,
+                            TAKE_PROFIT_PCT,
+                            STOP_LOSS_PCT,
+                            trailing_stop_enabled=TRAILING_STOP_ENABLED,
+                            trailing_activation_pct=TRAILING_STOP_ACTIVATION_PCT,
+                            trailing_callback_pct=TRAILING_STOP_CALLBACK_PCT,
+                        )
+                        max_profit = pos.max_profit
+                        if should_exit:
+                            exit_reason = trigger
+                            exit_price = current_price
+                    else:
+                        profit_pct = ((current_price - entry_price) / entry_price) * 100
+                        if profit_pct > max_profit:
+                            max_profit = profit_pct
+                        async with _dashboard_lock:
+                            if token in _active_trades:
+                                _active_trades[token]["current_price"] = current_price
+                                _active_trades[token]["profit_pct"] = profit_pct
+                                _active_trades[token]["max_profit"] = max_profit
+                                _active_trades[token]["elapsed"] = int(elapsed)
+                        if profit_pct >= TAKE_PROFIT_PCT:
+                            exit_reason = "TAKE_PROFIT"
+                            exit_price = current_price
+                        elif profit_pct <= STOP_LOSS_PCT:
+                            exit_reason = "STOP_LOSS"
+                            exit_price = current_price
 
             if exit_reason:
                 log.info(f"GMGN fallback: {exit_reason} for {token[:8]}. Selling via GMGN...")
@@ -1114,6 +1305,7 @@ async def _live_dashboard_loop():
         try:
             await asyncio.sleep(2)
             _refresh_settings()
+            prune_all_caches()
             
             # 0. Sync external paper wallet updates if any occurred outside trade_brain
             if TRADE_MODE == "PAPER":
@@ -1139,6 +1331,8 @@ async def _live_dashboard_loop():
                 wallet_init = STATE.initial_balance
                 pending_closed = STATE.closed_trades[:]
                 STATE.closed_trades.clear()
+                pending_signals = STATE.signal_journal_buffer[:]
+                STATE.signal_journal_buffer.clear()
 
             _save_json_atomic(LIVE_TRADES_FILE, trades_list)
 
@@ -1147,6 +1341,16 @@ async def _live_dashboard_loop():
                 settings_manager.set_paper_wallet_balance(wallet_bal)
             elif WALLET_FILE:
                 _save_json_atomic(WALLET_FILE, {"balance": wallet_bal, "initial": wallet_init})
+
+            # 2b. Flush prospective signal & latency journal
+            if pending_signals:
+                try:
+                    os.makedirs("data", exist_ok=True)
+                    with open(os.path.join("data", "signal_journal.jsonl"), "a", encoding="utf-8") as sf:
+                        for s_rec in pending_signals:
+                            sf.write(json.dumps(s_rec) + "\n")
+                except Exception as se:
+                    log.error(f"Failed to append to data/signal_journal.jsonl: {se}")
 
             # 3. Flush completed trades to append-only NDJSON and mirror to JSON
             if pending_closed:
@@ -1282,6 +1486,7 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
                     f"Recording as TAKE_PROFIT."
                 )
                 reason = "TAKE_PROFIT"
+                max_profit = max(max_profit, gross_pct)
             else:
                 # The token is still positive / in profit.
                 # Do NOT sell a winning position on a false DexScreener mid-dip!
@@ -1332,6 +1537,8 @@ async def close_trade(wallet, token, entry_time, entry_price, exit_price, max_pr
         STATE.credit_balance(trade_size + net_profit_usd)
         if token in _active_trades:
             del _active_trades[token]
+        STATE.register_token_exit(token, cooldown_minutes=TOKEN_COOLDOWN_MINUTES, net_profit_usd=net_profit_usd)
+        STATE.record_daily_pnl(net_profit_usd)
         STATE.record_closed_trade(trade_record)
 
     if fill_data_available:
@@ -1602,6 +1809,65 @@ async def record_trade(trade_data: dict):
 
         if token_address in STATE.seeded_blacklist:
             log.info(f"Skipping {token_address[:8]} - Blacklisted as seeded wave attack token.")
+            STATE.record_signal_event({
+                "wallet": wallet, "token_address": token_address,
+                "decision": "REJECTED", "reason": "SEEDED_BLACKLIST",
+            })
+            continue
+
+        # Stale-Signal Gate: reject buy signals that took too long to arrive/decode from on-chain blockTime
+        raw_block_time = trade_data.get("block_time")
+        sig_age = trade_data.get("signal_age_seconds")
+        if sig_age is None and raw_block_time is not None:
+            try:
+                sig_age = max(0.0, now_ts - float(raw_block_time))
+            except (TypeError, ValueError):
+                sig_age = None
+        if MAX_SIGNAL_AGE_SECONDS > 0 and sig_age is not None and sig_age > MAX_SIGNAL_AGE_SECONDS:
+            log.warning(
+                f"⏱️ Skipping stale buy signal for {token_address[:8]} from {wallet[:8]}: "
+                f"signal age {sig_age:.2f}s > MAX_SIGNAL_AGE_SECONDS ({MAX_SIGNAL_AGE_SECONDS:.1f}s)."
+            )
+            STATE.record_signal_event({
+                "wallet": wallet, "token_address": token_address,
+                "decision": "REJECTED", "reason": "STALE_SIGNAL",
+                "signal_age_seconds": round(float(sig_age), 3),
+            })
+            continue
+
+        # Consensus: how many distinct whitelisted whales bought this token recently.
+        recent_whales = set(STATE.recent_buy_signals.get(token_address, {}).keys()) | {wallet}
+        is_consensus = len(recent_whales) >= 2
+
+        # Per-token outcome-aware post-loss cooldown and 24-hour loss-streak cap defense
+        on_cooldown, cd_reason = STATE.is_token_on_cooldown(
+            token_address,
+            now_ts=now_ts,
+            max_entries_24h=MAX_ENTRIES_PER_TOKEN_24H,
+            is_consensus=is_consensus,
+        )
+        if on_cooldown:
+            log.info(f"⏳ Skipping {token_address[:8]} — {cd_reason}.")
+            STATE.record_signal_event({
+                "wallet": wallet, "token_address": token_address,
+                "decision": "REJECTED", "reason": "TOKEN_COOLDOWN",
+                "detail": cd_reason,
+            })
+            continue
+
+        # Daily portfolio max-drawdown circuit breaker check
+        ref_equity = STATE.initial_balance or STATE.wallet_balance
+        breaker_tripped, breaker_reason = STATE.is_circuit_breaker_tripped(
+            max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+            reference_equity=ref_equity,
+        )
+        if breaker_tripped:
+            log.critical(f"🛑 CIRCUIT BREAKER HALT: {breaker_reason}. Skipping new entry for {token_address[:8]}.")
+            STATE.record_signal_event({
+                "wallet": wallet, "token_address": token_address,
+                "decision": "REJECTED", "reason": "CIRCUIT_BREAKER",
+                "detail": breaker_reason,
+            })
             continue
 
         # Wave / Seeder Attack Defense (FOMO Radar provenance algorithm for new entries)
@@ -1624,10 +1890,6 @@ async def record_trade(trade_data: dict):
             log.info(f"Token {token_address[:8]} is already being processed. Skipping duplicate API event.")
             continue
 
-        # Consensus: how many distinct whitelisted whales bought this token recently.
-        recent_whales = set(STATE.recent_buy_signals.get(token_address, {}).keys()) | {wallet}
-        is_consensus = len(recent_whales) >= 2
-
         if is_consensus:
             log.info(f"🔥 MULTI-WHALE CONSENSUS SIGNAL for {token_address[:8]}! Whales: {[w[:8] for w in recent_whales]}")
 
@@ -1644,10 +1906,20 @@ async def record_trade(trade_data: dict):
             if entry_price > 0:
                 if volume_24h < MIN_24H_VOLUME:
                     log.warning(f"Trade Rejected: {token_address[:8]} has 24h volume (${volume_24h:,.0f}) < MIN (${MIN_24H_VOLUME:,.0f})")
+                    STATE.record_signal_event({
+                        "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                        "decision": "REJECTED", "reason": "LOW_24H_VOLUME",
+                        "volume_24h": volume_24h, "market_cap": market_cap,
+                    })
                     continue
                     
                 if market_cap < MIN_MARKET_CAP:
                     log.warning(f"Trade Rejected: {token_address[:8]} has Market Cap (${market_cap:,.0f}) < MIN (${MIN_MARKET_CAP:,.0f})")
+                    STATE.record_signal_event({
+                        "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                        "decision": "REJECTED", "reason": "LOW_MARKET_CAP",
+                        "volume_24h": volume_24h, "market_cap": market_cap,
+                    })
                     continue
 
                 # Real decimals are required to size any quote correctly. Refusing the trade
@@ -1659,12 +1931,20 @@ async def record_trade(trade_data: dict):
                         f"Trade Rejected: could not resolve decimals for {token_address[:8]}. "
                         f"Refusing to size a trade on a guessed value."
                     )
+                    STATE.record_signal_event({
+                        "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                        "decision": "REJECTED", "reason": "MISSING_DECIMALS",
+                    })
                     continue
 
                 # Consensus is a signal feature, not permission to bypass a hard risk gate.
                 if MOMENTUM_FILTER_ENABLED:
                     is_safe = await check_momentum(token_address)
                     if not is_safe:
+                        STATE.record_signal_event({
+                            "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                            "decision": "REJECTED", "reason": "MOMENTUM_PUMP_FILTER",
+                        })
                         continue
                 
                 sol_mint = "So11111111111111111111111111111111111111112"
@@ -1827,12 +2107,31 @@ async def record_trade(trade_data: dict):
                     continue
                     
                 expected_output = int(buy_route.get("outAmount", "0"))
+                rt_loss_pct = 0.0
                 if expected_output > 0:
                     log.info(f"PRE-TRADE: Checking Honeypot sell liquidity for {token_address}...")
                     sell_route = await get_swap_quote(token_address, sol_mint, expected_output)
                     if not sell_route:
                         log.error(f"HONEYPOT DETECTED: {token_address} allows buying but blocks selling! Trade rejected.")
+                        STATE.record_signal_event({
+                            "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                            "decision": "REJECTED", "reason": "HONEYPOT_NO_SELL_ROUTE",
+                        })
                         continue
+                    sell_back_lamports = int(sell_route.get("outAmount", "0") or 0)
+                    if sell_back_lamports > 0 and lamports > 0 and sell_back_lamports < lamports:
+                        rt_loss_pct = ((lamports - sell_back_lamports) / lamports) * 100.0
+                        if MAX_ROUND_TRIP_LOSS_PCT > 0 and rt_loss_pct > MAX_ROUND_TRIP_LOSS_PCT:
+                            log.warning(
+                                f"Trade Rejected: {token_address[:8]} immediate round-trip buy+sell loss "
+                                f"{rt_loss_pct:.2f}% > MAX_ROUND_TRIP_LOSS_PCT ({MAX_ROUND_TRIP_LOSS_PCT:.1f}%)."
+                            )
+                            STATE.record_signal_event({
+                                "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                                "decision": "REJECTED", "reason": "ROUND_TRIP_LOSS_EXCEEDED",
+                                "round_trip_loss_pct": round(rt_loss_pct, 3),
+                            })
+                            continue
                 else:
                     log.warning(f"Trade Rejected: Zero output expected for {token_address}.")
                     continue
@@ -1844,6 +2143,11 @@ async def record_trade(trade_data: dict):
                         f"Trade Rejected: {token_address[:8]} entry price impact {impact_pct:.2f}% "
                         f"> MAX_PRICE_IMPACT_PCT ({MAX_PRICE_IMPACT_PCT}%). Position too large for this pool."
                     )
+                    STATE.record_signal_event({
+                        "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                        "decision": "REJECTED", "reason": "PRICE_IMPACT_EXCEEDED",
+                        "entry_price_impact_pct": round(impact_pct, 3),
+                    })
                     continue
 
                 # ── Entry price: the executable fill, not a DexScreener mid ───────────
@@ -1959,6 +2263,7 @@ async def record_trade(trade_data: dict):
                     pos.consensus_whales = set(recent_whales)
                     async with _dashboard_lock:
                         STATE.add_position(token_address, pos)
+                        STATE.register_token_entry(token_address, now_ts=now_ts)
                     await _persist_active_positions_now()
 
                     log.info(f"GMGN: Waiting for order {buy_result['order_id']} to confirm...")
@@ -2060,6 +2365,17 @@ async def record_trade(trade_data: dict):
                     pos.consensus_whales = set(recent_whales)
                     async with _dashboard_lock:
                         STATE.add_position(token_address, pos)
+                        STATE.register_token_entry(token_address, now_ts=now_ts)
+                        STATE.record_signal_event({
+                            "wallet": wallet, "token_address": token_address, "symbol": symbol,
+                            "decision": "ACCEPTED", "mode": TRADE_MODE,
+                            "trade_size_usd": round(trade_size, 2),
+                            "entry_price": entry_price,
+                            "entry_mid_price": entry_mid_price,
+                            "entry_price_impact_pct": round(impact_pct, 3),
+                            "round_trip_loss_pct": round(rt_loss_pct, 3),
+                            "signal_age_seconds": round(float(sig_age), 3) if sig_age is not None else None,
+                        })
                     paper_debited = 0.0  # capital is now held by the position; do not refund
 
                     task = asyncio.create_task(

@@ -36,12 +36,26 @@ _CLI_TIMEOUT = 45.0
 
 # Fee settings — configurable in settings_manager or .env
 import settings_manager
+import jito_bundle
 
 _PRIORITY_FEE = os.getenv("GMGN_PRIORITY_FEE", "0.00001")
 _DEFAULT_TIP_FEE = os.getenv("GMGN_TIP_FEE", "0.00001")
 
+async def _get_tip_fee_str_async() -> str:
+    """Dynamically resolves tip fee in SOL via jito_bundle (respecting JITO_DYNAMIC_TIP & percentile)."""
+    try:
+        tip_lamports = await jito_bundle.get_effective_tip_lamports()
+        if tip_lamports > 0:
+            return f"{tip_lamports / 1_000_000_000:.6f}"
+    except Exception:
+        pass
+    tip_sol = settings_manager.get("JITO_TIP_SOL")
+    if tip_sol is not None:
+        return f"{float(tip_sol):.6f}"
+    return _DEFAULT_TIP_FEE
+
 def _get_tip_fee_str() -> str:
-    """Dynamically resolves tip fee in SOL from settings_manager."""
+    """Synchronous fallback tip resolution from settings_manager."""
     tip_sol = settings_manager.get("JITO_TIP_SOL")
     if tip_sol is not None:
         return f"{float(tip_sol):.6f}"
@@ -173,9 +187,10 @@ async def execute_gmgn_buy(
     ]
     if _is_anti_mev_enabled():
         buy_args.append("--anti-mev")
+    tip_fee_str = await _get_tip_fee_str_async()
     buy_args.extend([
         "--priority-fee", _PRIORITY_FEE,
-        "--tip-fee", _get_tip_fee_str(),
+        "--tip-fee", tip_fee_str,
         "--condition-orders", json.dumps(condition_orders),
     ])
     result = await _run_gmgn_cli(*buy_args)
@@ -325,9 +340,10 @@ async def execute_gmgn_sell_all(wallet_address: str, token_address: str) -> dict
     ]
     if _is_anti_mev_enabled():
         sell_args.append("--anti-mev")
+    tip_fee_str = await _get_tip_fee_str_async()
     sell_args.extend([
         "--priority-fee", _PRIORITY_FEE,
-        "--tip-fee", _get_tip_fee_str(),
+        "--tip-fee", tip_fee_str,
     ])
     result = await _run_gmgn_cli(*sell_args)
 

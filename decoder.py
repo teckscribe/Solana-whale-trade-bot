@@ -13,6 +13,7 @@ Credentials loaded from .env:
 """
 
 import os
+import time
 import logging
 import asyncio
 import random
@@ -32,7 +33,7 @@ log = logging.getLogger("WhaleDecoder")
 
 RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 
-from connection_pool import get_rpc_client, create_fallback_rpc_client
+from connection_pool import get_rpc_client, create_fallback_rpc_client, RPC_BUDGET
 
 SOL_MINT = "So11111111111111111111111111111111111111112"
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
@@ -68,6 +69,7 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
     """
     log.info(f"Decoding TX: {signature_str}")
     _decode_stats["total_attempts"] += 1
+    received_at = time.time()
     try:
         sig = Signature.from_string(signature_str) if Signature and hasattr(Signature, "from_string") else signature_str
         
@@ -79,6 +81,7 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
         rpc_client = await get_rpc_client()
         for attempt in range(MAX_RETRIES):
             try:
+                await RPC_BUDGET.acquire(priority="high")
                 response = await rpc_client.get_transaction(
                     sig, 
                     commitment="confirmed",
@@ -87,6 +90,7 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
                 if response and response.value:
                     break
             except Exception as rpc_e:
+                RPC_BUDGET.observe_error()
                 log.debug(f"RPC error on {signature_str[:10]}: {rpc_e}")
 
             # Exponential backoff: 1.5, 2.25, 3.375, 5.06, 7.59, 11.4, 17.1, 25.6, 30, 30
@@ -127,9 +131,17 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
             return None
         
         _decode_stats["success"] += 1
+        decoded_at = time.time()
             
         tx = response.value.transaction
         meta = tx.meta
+        raw_block_time = getattr(response.value, "block_time", None)
+        if raw_block_time is None and isinstance(response.value, dict):
+            raw_block_time = response.value.get("blockTime") or response.value.get("block_time")
+        try:
+            block_time = float(raw_block_time) if raw_block_time is not None else None
+        except (TypeError, ValueError):
+            block_time = None
         
         if meta.err is not None:
             log.info(f"Transaction {signature_str} failed. Ignoring.")
@@ -142,11 +154,16 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
         
         # Helper to process token balances for our whale wallets
         def process_balances(balances, is_post=False):
-            for b in balances:
+            for b in balances or []:
                 owner = str(b.owner)
                 if owner == whale_wallet:
                     mint = str(b.mint)
-                    amount = float(b.ui_token_amount.ui_amount or 0)
+                    ui_tok = b.ui_token_amount
+                    raw_val = ui_tok.ui_amount if getattr(ui_tok, "ui_amount", None) is not None else getattr(ui_tok, "ui_amount_string", None)
+                    try:
+                        amount = float(raw_val or 0.0)
+                    except (TypeError, ValueError):
+                        amount = 0.0
                     if mint not in changes:
                         changes[mint] = 0.0
                     changes[mint] += amount if is_post else -amount
@@ -231,12 +248,22 @@ async def decode_transaction(signature_str: str, whale_wallet: str):
         # SOL_MINT delta above the 0.001 threshold, and paying in any SPL token registers
         # directly. The only buys this misses are ones costing under ~0.001 SOL.
         if bought and sold:
-            log.info(f"Whale Swap Detected! Bought: {bought} | Sold: {sold}")
+            signal_age = round(decoded_at - block_time, 3) if block_time and decoded_at >= block_time else None
+            decode_latency = round(decoded_at - received_at, 3)
+            log.info(
+                f"Whale Swap Detected! Bought: {bought} | Sold: {sold} "
+                f"(decode={decode_latency:.2f}s, chain_age={f'{signal_age:.2f}s' if signal_age is not None else 'n/a'})"
+            )
             return {
                 "signature": signature_str,
                 "bought": bought,
                 "sold": sold,
-                "wallet": whale_wallet
+                "wallet": whale_wallet,
+                "block_time": block_time,
+                "received_at": received_at,
+                "decoded_at": decoded_at,
+                "signal_age_seconds": signal_age,
+                "decode_latency_seconds": decode_latency,
             }
         elif bought:
             log.debug(

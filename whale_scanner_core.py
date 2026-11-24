@@ -9,6 +9,7 @@ Core engine for high-performance GMGN whale scanning,
 import sys
 import os
 import json
+import shutil
 import subprocess
 import time
 import re
@@ -85,8 +86,26 @@ def clear_cache():
 
 # ─── GMGN CLI Execution ───────────────────────────────────────────────────────
 
+_gmgn_ban_until: float = 0.0
+_last_gmgn_call_at: float = 0.0
+MIN_GMGN_INTERVAL_SEC: float = 1.5
+
+
+def is_gmgn_rate_limited() -> bool:
+    """Return True if GMGN CLI is currently in a 429 cooldown window."""
+    return time.time() < _gmgn_ban_until
+
+
 def run_cmd(cmd: str) -> str:
-    """Run shell command with low priority and timeout protection."""
+    """Run shell command with low priority, rate pacing, 429 circuit breaker, and timeout protection."""
+    global _gmgn_ban_until, _last_gmgn_call_at
+    now = time.time()
+    if now < _gmgn_ban_until:
+        return ""
+    elapsed = now - _last_gmgn_call_at
+    if _last_gmgn_call_at > 0 and elapsed < MIN_GMGN_INTERVAL_SEC:
+        time.sleep(MIN_GMGN_INTERVAL_SEC - elapsed)
+
     env = os.environ.copy()
     if GMGN_API_KEY:
         env["GMGN_API_KEY"] = GMGN_API_KEY
@@ -97,6 +116,7 @@ def run_cmd(cmd: str) -> str:
         creationflags = subprocess.IDLE_PRIORITY_CLASS | subprocess.CREATE_NO_WINDOW
 
     try:
+        _last_gmgn_call_at = time.time()
         result = subprocess.run(
             cmd,
             shell=True,
@@ -109,6 +129,12 @@ def run_cmd(cmd: str) -> str:
             timeout=25.0
         )
         if result.returncode != 0 or not result.stdout:
+            stderr = result.stderr or ""
+            if "RATE_LIMIT_BANNED" in stderr or "HTTP 429" in stderr:
+                m = re.search(r"~(\d+)s remaining", stderr)
+                wait_sec = float(m.group(1)) + 5.0 if m else 180.0
+                _gmgn_ban_until = time.time() + wait_sec
+                log.warning(f"GMGN CLI rate limit reached; pausing GMGN CLI queries for {wait_sec:.0f}s to prevent ban extension.")
             return ""
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
@@ -146,6 +172,29 @@ def parse_gmgn_stats_output(raw_output: str) -> dict:
         except (ValueError, TypeError):
             native_balance = 0.0
 
+        try:
+            roi_pct = float(s.get("realized_profit_pnl", 0) or 0.0) * 100.0
+        except (ValueError, TypeError):
+            roi_pct = 0.0
+
+        try:
+            bought_cost = float(s.get("bought_cost", 0) or 0.0)
+        except (ValueError, TypeError):
+            bought_cost = 0.0
+
+        try:
+            bought_fee = float(s.get("bought_fee", 0) or 0.0)
+        except (ValueError, TypeError):
+            bought_fee = 0.0
+
+        fee_to_profit_pct = (bought_fee / realized_profit * 100.0) if realized_profit > 0 else 0.0
+        token_num = int(pnl_stat.get("token_num", 0) or 0)
+        runners_2x_plus = int(pnl_stat.get("pnl_2x_5x_num", 0) or 0) + int(pnl_stat.get("pnl_gt_5x_num", 0) or 0)
+        try:
+            avg_holding_seconds = float(pnl_stat.get("avg_holding_period", 0) or 0.0)
+        except (ValueError, TypeError):
+            avg_holding_seconds = 0.0
+
         tags = s.get("common", {}).get("tags", []) or []
 
         return {
@@ -155,6 +204,13 @@ def parse_gmgn_stats_output(raw_output: str) -> dict:
             "sell": sell_count,
             "realized": realized_profit,
             "native_balance": native_balance,
+            "roi_pct": round(roi_pct, 2),
+            "bought_cost": round(bought_cost, 2),
+            "bought_fee": round(bought_fee, 2),
+            "fee_to_profit_pct": round(fee_to_profit_pct, 2),
+            "token_num": token_num,
+            "runners_2x_plus": runners_2x_plus,
+            "avg_holding_seconds": round(avg_holding_seconds, 1),
             "tags": tags
         }
     except Exception as e:
@@ -164,9 +220,13 @@ def parse_gmgn_stats_output(raw_output: str) -> dict:
 
 def query_gmgn_stats(wallet: str, period: str = "7d") -> dict:
     """Query GMGN CLI for specific wallet and period."""
-    npx_prefix = "npx.cmd" if os.name == "nt" else "/usr/bin/npx"
+    gmgn_bin = shutil.which("gmgn-cli.cmd" if os.name == "nt" else "gmgn-cli")
     nice_prefix = "" if os.name == "nt" else "nice -n 19 "
-    cmd = f"{nice_prefix}{npx_prefix} -y gmgn-cli portfolio stats --chain sol --period {period} --wallet {wallet} --raw"
+    if gmgn_bin:
+        cmd = f'{nice_prefix}"{gmgn_bin}" portfolio stats --chain sol --period {period} --wallet {wallet} --raw'
+    else:
+        npx_prefix = "npx.cmd" if os.name == "nt" else "/usr/bin/npx"
+        cmd = f"{nice_prefix}{npx_prefix} -y gmgn-cli portfolio stats --chain sol --period {period} --wallet {wallet} --raw"
     out = run_cmd(cmd)
     return parse_gmgn_stats_output(out)
 
@@ -190,7 +250,7 @@ def fetch_wallet_profile(
 
     if use_cache and wallet in cache:
         cached_entry = cache[wallet]
-        if now - cached_entry.get("cached_at", 0) < CACHE_TTL:
+        if (now - cached_entry.get("cached_at", 0) < CACHE_TTL) and cached_entry.get("7d"):
             return cached_entry
 
     profile = {
@@ -205,6 +265,13 @@ def fetch_wallet_profile(
 
     # --- Tier 1: 7-day Anchor Evaluation ---
     s7d = query_gmgn_stats(wallet, period="7d")
+    if not s7d:
+        # Do not poison cache with empty CLI timeouts/rate-limit errors;
+        # fall back to prior non-empty cached profile if available.
+        if use_cache and wallet in cache and cache[wallet].get("7d"):
+            return cache[wallet]
+        return profile
+
     profile["7d"] = s7d
     profile["native_balance"] = s7d.get("native_balance", 0.0)
     profile["tags"] = s7d.get("tags", [])
@@ -232,7 +299,7 @@ def fetch_wallet_profile(
         profile["1d"] = {"winrate": 0.0, "trades": 0, "realized": 0.0}
         profile["30d"] = s7d
 
-    if use_cache:
+    if use_cache and s7d:
         cache[wallet] = profile
         save_cache(cache)
 
@@ -346,11 +413,37 @@ def rank_and_filter_whales(
 # ─── Export Utilities ─────────────────────────────────────────────────────────
 
 def export_ranked_json(ranked_whales: List[dict], target_path: str = RANKED_FILE):
-    """Save ranked list to formatted JSON file."""
+    """Save ranked list to formatted JSON file, preserving existing multi-channel discovery metadata."""
     os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
+    existing_by_wallet: Dict[str, dict] = {}
+    if os.path.exists(target_path):
+        try:
+            with open(target_path, "r", encoding="utf-8") as f:
+                existing_list = json.load(f)
+            if isinstance(existing_list, list):
+                existing_by_wallet = {
+                    row.get("wallet"): row for row in existing_list if isinstance(row, dict) and row.get("wallet")
+                }
+        except Exception:
+            existing_by_wallet = {}
+
+    merged_list = []
+    for item in ranked_whales:
+        w = item.get("wallet")
+        prior = existing_by_wallet.get(w, {}) if w else {}
+        merged = dict(prior)
+        merged.update(item)
+        prior_sources = [s for s in (prior.get("discovery_sources", []) or []) if s]
+        cur_sources = [s for s in (item.get("discovery_sources", []) or []) if s]
+        combined_sources = sorted(set(prior_sources) | set(cur_sources) | {"gmgn"})
+        if len(combined_sources) > 1 and "local_history" in combined_sources:
+            combined_sources = [s for s in combined_sources if s != "local_history"]
+        merged["discovery_sources"] = combined_sources
+        merged_list.append(merged)
+
     temp_path = f"{target_path}.tmp"
     with open(temp_path, "w", encoding="utf-8") as f:
-        json.dump(ranked_whales, f, indent=2)
+        json.dump(merged_list, f, indent=2)
     os.replace(temp_path, target_path)
 
 

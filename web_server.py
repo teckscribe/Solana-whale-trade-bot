@@ -37,6 +37,8 @@ from datetime import datetime, timezone
 from jupiter_api import get_sol_price_usd
 import settings_manager
 import whale_manager
+import connection_pool
+from trade_history import load_trade_history
 from omni_whale_finder import (
     ALLOWED_SOURCES,
     evaluate_discovery_consensus,
@@ -128,7 +130,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in os.getenv("WEB_ALLOWED_ORIGINS", "").split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -259,18 +261,19 @@ async def get_dashboard(_: bool = Depends(require_auth)):
         except Exception: pass
         
     net_profit = 0.0
-    if os.path.exists("ml_training_data.json"):
-        try:
-            with open("ml_training_data.json", "r") as f:
-                hist = json.load(f)
-                for t in hist:
-                    t_mode = str(t.get("trade_mode", "PAPER")).strip().strip('"\'').upper()
-                    is_t_live = t_mode in ["LIVE", "TRUE"]
-                    if (trade_mode == "LIVE" and is_t_live) or (trade_mode == "PAPER" and not is_t_live):
-                        net_profit += trade_pnl(t)
-        except Exception: pass
+    try:
+        hist = load_trade_history()
+        for t in hist:
+            t_mode = str(t.get("trade_mode", "PAPER")).strip().strip('"\'').upper()
+            if t_mode == "HISTORICAL":
+                continue
+            is_t_live = t_mode in ["LIVE", "TRUE"]
+            if (trade_mode == "LIVE" and is_t_live) or (trade_mode == "PAPER" and not is_t_live):
+                net_profit += trade_pnl(t)
+    except Exception:
+        pass
 
-    max_trades = int(os.getenv("MAX_CONCURRENT_TRADES", "10"))
+    max_trades = int(settings_manager.get("MAX_CONCURRENT_TRADES"))
 
     if trade_mode == "PAPER":
         # READ-ONLY. This endpoint used to recompute the balance and write it back to
@@ -284,7 +287,7 @@ async def get_dashboard(_: bool = Depends(require_auth)):
         initial_bal = wallet_data.get("initial", 100.0)
         available_cash = wallet_data.get("balance", 0.0)
     else:
-        # LIVE Mode: Query real on-chain SOL balance via direct JSON-RPC
+        # LIVE Mode: Query real on-chain SOL balance via shared connection pool
         available_cash = 0.0
         try:
             wallet_pk = os.getenv("WALLET_PRIVATE_KEY", "").strip()
@@ -305,17 +308,18 @@ async def get_dashboard(_: bool = Depends(require_auth)):
                     "method": "getBalance",
                     "params": [pubkey_str]
                 }
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(rpc_url, json=payload, timeout=5.0)
-                    if resp.status_code == 200:
-                        result = resp.json().get("result", {})
-                        lamports = result.get("value", 0)
-                        sol_bal = lamports / 1_000_000_000.0
-                        
-                        sol_price = await get_sol_price_usd()
-                        if sol_price <= 0: sol_price = 150.0
-                        
-                        available_cash = sol_bal * sol_price
+                await connection_pool.RPC_BUDGET.acquire(priority="normal")
+                client = await connection_pool.get_client()
+                resp = await client.post(rpc_url, json=payload, timeout=5.0)
+                if resp.status_code == 200:
+                    result = resp.json().get("result", {})
+                    lamports = result.get("value", 0)
+                    sol_bal = lamports / 1_000_000_000.0
+                    
+                    sol_price = await get_sol_price_usd()
+                    if sol_price <= 0: sol_price = 150.0
+                    
+                    available_cash = sol_bal * sol_price
         except Exception as e:
             logging.error(f"Live balance fetch error in dashboard API: {e}")
             available_cash = wallet_data.get("balance", 0.0)
@@ -349,12 +353,10 @@ async def get_dashboard(_: bool = Depends(require_auth)):
 
 @app.get("/api/history")
 async def get_history(mode: str = "ALL", _: bool = Depends(require_auth)):
-    trades = []
-    if os.path.exists("ml_training_data.json"):
-        try:
-            with open("ml_training_data.json", "r") as f:
-                trades = json.load(f)
-        except: pass
+    try:
+        trades = load_trade_history()
+    except Exception:
+        trades = []
         
     filtered = []
     total_pnl = 0.0
@@ -362,6 +364,8 @@ async def get_history(mode: str = "ALL", _: bool = Depends(require_auth)):
     actioned_count = 0
     for t in trades:
         t_raw = str(t.get("trade_mode", "UNKNOWN")).strip().strip('"\'').upper()
+        if t_raw == "HISTORICAL":
+            continue
         t_mode = "LIVE" if t_raw in ["LIVE", "TRUE"] else ("PAPER" if t_raw == "PAPER" else t_raw)
         if mode != "ALL" and t_mode != mode:
             continue
@@ -403,12 +407,10 @@ async def get_whales(mode: str = "ALL", _: bool = Depends(require_auth)):
         if k not in whale_db:
             whale_db[k] = v
         
-    trades = []
-    if os.path.exists("ml_training_data.json"):
-        try:
-            with open("ml_training_data.json", "r") as f:
-                trades = json.load(f)
-        except Exception: pass
+    try:
+        trades = load_trade_history()
+    except Exception:
+        trades = []
         
     stats = {}
     for w in whale_db.keys():
@@ -416,6 +418,8 @@ async def get_whales(mode: str = "ALL", _: bool = Depends(require_auth)):
         
     for t in trades:
         t_raw = str(t.get("trade_mode", "UNKNOWN")).strip().strip('"\'').upper()
+        if t_raw == "HISTORICAL":
+            continue
         t_mode = "LIVE" if t_raw in ["LIVE", "TRUE"] else ("PAPER" if t_raw == "PAPER" else t_raw)
         if mode != "ALL" and t_mode != mode:
             continue
@@ -935,6 +939,42 @@ async def get_telemetry(_: bool = Depends(require_auth)):
     return {
         "budgets": pool_stats,
         "decoder": decode_stats
+    }
+
+@app.get("/api/signals")
+async def get_signal_journal(limit: int = 100, _: bool = Depends(require_auth)):
+    """Returns prospective signal & latency journal entries and rejection breakdown."""
+    journal_path = os.path.join(BASE_DIR, "data", "signal_journal.jsonl")
+    records = []
+    if os.path.exists(journal_path):
+        try:
+            with open(journal_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            records.append(json.loads(line))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+    by_reason: Dict[str, int] = {}
+    accepted = 0
+    rejected = 0
+    for r in records:
+        if r.get("decision") == "ACCEPTED":
+            accepted += 1
+        else:
+            rejected += 1
+            reason = str(r.get("reason", "UNKNOWN"))
+            by_reason[reason] = by_reason.get(reason, 0) + 1
+    recent = list(reversed(records[-max(1, min(limit, 500)):]))
+    return {
+        "total_signals": len(records),
+        "accepted_count": accepted,
+        "rejected_count": rejected,
+        "rejections_by_reason": by_reason,
+        "signals": recent,
     }
 
 @app.get("/api/log-info")

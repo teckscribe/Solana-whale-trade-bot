@@ -197,59 +197,55 @@ def send_error_alert(error_text: str):
 
 def send_gmgn_wallet_approval(stats: dict):
     """
-    Sends a GMGN wallet discovery alert with detailed stats and
-    inline Approve/Reject buttons for the user to decide.
+    Sends a verified GMGN wallet discovery alert with cross-checked copy-tradability
+    metrics and inline Approve/Reject buttons for the user to decide.
     """
     addr = stats.get("address", "Unknown")
-    sol_bal = stats.get("sol_balance", 0)
-    
-    wr_1d = stats.get("winrate_1d", 0)
-    wr_7d = stats.get("winrate_7d", 0)
-    wr_30d = stats.get("winrate_30d", 0)
-    wr_all = stats.get("winrate_all", 0)
-    
-    trades_1d = stats.get("total_trades_1d", 0)
-    trades_7d = stats.get("total_trades_7d", 0)
-    trades_30d = stats.get("total_trades_30d", 0)
-    trades_all = stats.get("total_trades_all", 0)
-    
-    wins_1d = stats.get("wins_1d", 0)
-    wins_7d = stats.get("wins_7d", 0)
-    wins_30d = stats.get("wins_30d", 0)
-    wins_all = stats.get("wins_all", 0)
-    
-    realized = stats.get("realized_profit", 0)
+    sol_bal = float(stats.get("sol_balance", 0.0) or 0.0)
+    wr_7d = float(stats.get("winrate_7d", 0.0) or 0.0)
+    trades_7d = int(stats.get("total_trades_7d", 0) or 0)
+    buy_7d = int(stats.get("buy_7d", 0) or 0)
+    sell_7d = int(stats.get("sell_7d", 0) or 0)
+    token_num_7d = int(stats.get("token_num_7d", 0) or 0)
+    winning_tokens_7d = int(stats.get("winning_tokens_7d", stats.get("wins_7d", 0)) or 0)
+
+    realized = float(stats.get("realized_profit", 0.0) or 0.0)
+    roi_pct = float(stats.get("roi_pct", 0.0) or 0.0)
+    fee_ratio = float(stats.get("fee_to_profit_pct", 0.0) or 0.0)
+    runners_2x = int(stats.get("runners_2x_plus", 0) or 0)
+    ai_score = stats.get("ai_score", "N/A")
+    ai_status = stats.get("ai_status", "WHITELIST")
     tags = stats.get("tags", [])
     tags_str = ", ".join(tags) if tags else "None"
-    
-    # Build the win rate display lines, only showing periods with data
-    wr_lines = []
-    if trades_1d > 0:
-        wr_lines.append(f"   • 1D:   <b>{wr_1d:.0f}%</b> ({wins_1d}/{trades_1d} trades)")
-    if trades_7d > 0:
-        wr_lines.append(f"   • 7D:   <b>{wr_7d:.0f}%</b> ({wins_7d}/{trades_7d} trades)")
-    if trades_30d > 0:
-        wr_lines.append(f"   • 30D:  <b>{wr_30d:.0f}%</b> ({wins_30d}/{trades_30d} trades)")
-    if trades_all > 0:
-        wr_lines.append(f"   • All:  <b>{wr_all:.0f}%</b> ({wins_all}/{trades_all} trades)")
-    
-    if not wr_lines:
-        wr_lines.append(f"   • 7D:   <b>{wr_7d:.0f}%</b>")
-    
-    wr_display = "\n".join(wr_lines)
-    
+
+    if token_num_7d > 0:
+        wr_detail = f"<b>{wr_7d:.1f}%</b> ({winning_tokens_7d}/{token_num_7d} tokens)"
+    else:
+        wr_detail = f"<b>{wr_7d:.1f}%</b> ({winning_tokens_7d}/{trades_7d} trades)"
+
+    if buy_7d > 0 or sell_7d > 0:
+        swaps_detail = f"<b>{trades_7d}</b> ({buy_7d} buys / {sell_7d} sells)"
+    else:
+        swaps_detail = f"<b>{trades_7d}</b>"
+
     msg = (
-        f"🐋 <b>High Winrate Wallet Found!</b>\n"
+        f"🐋 <b>Verified Alpha Wallet Found!</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 SOL Balance: <b>{sol_bal:.2f} SOL</b>\n"
-        f"💵 Realized Profit: <b>${realized:,.2f}</b>\n"
+        f"💵 7D Realized Profit: <b>${realized:,.2f}</b>\n"
+        f"📈 7D Realized ROI: <b>{roi_pct:+.2f}%</b>\n"
+        f"🚀 2x+ Runners (7D): <b>{runners_2x}</b>\n"
+        f"⛽ Fee / Profit Ratio: <b>{fee_ratio:.1f}%</b>\n"
+        f"🤖 AI Safety Score: <b>{ai_score}/100 ({ai_status})</b>\n"
         f"🏷️ Tags: {tags_str}\n\n"
-        f"📊 <b>Win Rates:</b>\n"
-        f"{wr_display}\n\n"
+        f"📊 <b>7D Activity:</b>\n"
+        f"   • Win Rate: {wr_detail}\n"
+        f"   • Swaps:    {swaps_detail}\n"
+        f"   • Filter Check: ✅ <b>PASSED ALL PARAMETERS</b>\n\n"
         f"🔗 Address:\n<code>{addr}</code>\n\n"
-        f"<i>Source: GMGN.ai Smart Money</i>"
+        f"<i>Source: GMGN.ai Smart Money (Cross-Checked)</i>"
     )
-    
+
     # Send with inline keyboard buttons
     _send_message_with_buttons(msg, addr)
 

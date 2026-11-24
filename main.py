@@ -27,6 +27,7 @@ from decoder import decode_transaction
 from trade_brain import record_trade
 from discovery import run_discovery_cycle
 from gmgn_discovery import run_gmgn_discovery
+import omni_whale_finder
 import whale_manager
 from ml_engine import train_model
 from solders.keypair import Keypair
@@ -99,6 +100,25 @@ async def discovery_loop(scanner: WhaleScanner):
                     await run_gmgn_discovery()
                 except Exception as gmgn_e:
                     log.warning(f"GMGN Discovery error (non-fatal): {gmgn_e}")
+
+            # Run 5-Channel Omni-Whale Discovery & Automated Whitelist Hygiene
+            try:
+                omni_res = await omni_whale_finder.run_omni_whale_discovery(limit_per_source=10)
+                log.info(
+                    f"Omni-Whale Discovery cycle finished: {omni_res.get('clean_alphas_found', 0)} verified alphas, "
+                    f"{omni_res.get('total_evaluated', 0)} evaluated."
+                )
+            except Exception as omni_e:
+                log.warning(f"Omni-Whale Discovery error (non-fatal): {omni_e}")
+
+            try:
+                audit_res = whale_manager.audit_whitelist(auto_prune=True)
+                if audit_res.get("pruned_count", 0) > 0:
+                    log.info(f"Automated whitelist hygiene pruned {audit_res['pruned_count']} toxic whale(s).")
+                    active_whales = whale_manager.get_active_whales(limit=100, max_age_hours=24)
+                    await scanner.update_wallets(active_whales)
+            except Exception as audit_e:
+                log.warning(f"Whitelist hygiene audit error (non-fatal): {audit_e}")
 
         except Exception as e:
             log.error(f"Error in discovery loop: {e}")

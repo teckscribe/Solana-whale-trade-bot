@@ -55,6 +55,7 @@ MAX_SAFE_7D_TRADES = 200
 MIN_SAFE_AI_SCORE = 50
 MIN_SAFE_7D_TRADES = 3
 MIN_SAFE_7D_WINRATE = 45.0
+MIN_SAFE_SOL_BALANCE = 0.5
 MIN_REPEAT_BUYS = 2
 MIN_ACCUMULATION_SPAN_SECONDS = 30.0
 CLUSTER_WINDOW_SECONDS = 60 * 60
@@ -141,6 +142,50 @@ def evaluate_wallet_safety(wallet: str, profile: Dict[str, Any]) -> Dict[str, An
         rejections.append(f"Win rate {winrate:.1f}% is below {MIN_SAFE_7D_WINRATE:.0f}%")
     if realized <= 0.0:
         rejections.append(f"7d realized PnL must be positive; found ${realized:,.2f}")
+    native_bal_raw = s7.get("native_balance", profile.get("native_balance"))
+    is_nansen_only = profile.get("performance_source") == "nansen_profiler_pnl_summary"
+    if native_bal_raw is not None and not is_nansen_only:
+        try:
+            native_bal_val = float(native_bal_raw)
+            if native_bal_val < MIN_SAFE_SOL_BALANCE:
+                rejections.append(
+                    f"Insufficient SOL balance: {native_bal_val:.3f} SOL is below {MIN_SAFE_SOL_BALANCE:.1f} SOL minimum"
+                )
+        except (TypeError, ValueError):
+            pass
+
+    # Deep copy-tradability cross-checks (enforced whenever deep 7d stats are present)
+    if "roi_pct" in s7 and s7.get("bought_cost", 0):
+        try:
+            import settings_manager as _sm
+            min_roi_pct = float(_sm.get("GMGN_MIN_ROI_PCT"))
+        except Exception:
+            min_roi_pct = 8.0
+        roi_val = float(s7.get("roi_pct", 0.0) or 0.0)
+        if roi_val < min_roi_pct:
+            rejections.append(
+                f"Low 7d realized ROI: {roi_val:.2f}% is below {min_roi_pct:.1f}% minimum (micro-scalper)"
+            )
+
+    if "fee_to_profit_pct" in s7 and s7.get("bought_fee", 0):
+        try:
+            import settings_manager as _sm
+            max_fee_ratio = float(_sm.get("GMGN_MAX_FEE_TO_PROFIT_PCT"))
+        except Exception:
+            max_fee_ratio = 25.0
+        fee_ratio = float(s7.get("fee_to_profit_pct", 0.0) or 0.0)
+        if fee_ratio > max_fee_ratio:
+            rejections.append(
+                f"Excessive priority/bribe fee ratio: {fee_ratio:.1f}% of profit exceeds {max_fee_ratio:.1f}% max (MEV/sniper briber)"
+            )
+
+    buy_cnt = int(s7.get("buy", 0) or 0)
+    sell_cnt = int(s7.get("sell", 0) or 0)
+    if buy_cnt > 0 and sell_cnt > buy_cnt * 2.5:
+        rejections.append(
+            f"Asymmetric sell/buy ratio: {sell_cnt} sells vs {buy_cnt} buys ({sell_cnt / buy_cnt:.1f}x > 2.5x max; dump/clip-splitter)"
+        )
+
     if score.status == "BLACKLIST":
         rejections.append(f"AI blacklist: {', '.join(score.red_flags) or 'toxic pattern'}")
     elif score.score < MIN_SAFE_AI_SCORE:
@@ -250,23 +295,93 @@ async def fetch_gmgn_smart_money(
         if proc.returncode == 0 and proc.stdout:
             data = json.loads(proc.stdout.strip())
             trades = data.get("list", [])
-            seen = set()
+            seen_wallets = set()
+
+            # First: harvest pre-filtered funded (>=0.5 SOL), clean-tag smart_degen
+            # profitable traders on the top 2 active tokens so we prioritize human swing traders.
+            active_tokens = []
+            seen_tokens = set()
             for t in trades:
+                ba = t.get("base_address")
+                bs = t.get("base_symbol", "")
+                if ba and ba not in seen_tokens and ba != "So11111111111111111111111111111111111111112":
+                    seen_tokens.add(ba)
+                    active_tokens.append((ba, bs))
+                if len(active_tokens) >= 2:
+                    break
+
+            for ba, bs in active_tokens:
+                if len(candidates) >= limit:
+                    break
+                await asyncio.sleep(1.5)
+                tr_proc = await asyncio.to_thread(
+                    subprocess.run,
+                    [
+                        executable, "token", "traders",
+                        "--chain", "sol", "--address", ba,
+                        "--order-by", "profit", "--tag", "smart_degen",
+                        "--limit", "50", "--raw",
+                    ],
+                    timeout=25.0,
+                    **run_options,
+                )
+                if tr_proc.returncode == 0 and tr_proc.stdout:
+                    tr_list = json.loads(tr_proc.stdout.strip()).get("list", [])
+                    for row in tr_list:
+                        w = row.get("address")
+                        row_tags = {str(x).lower() for x in (row.get("tags") or [])}
+                        try:
+                            nb_lamports = int(float(row.get("native_balance", 0) or 0))
+                        except (TypeError, ValueError):
+                            nb_lamports = 0
+                        if (
+                            w and len(w) >= 32
+                            and w not in seen_wallets
+                            and nb_lamports >= int(MIN_SAFE_SOL_BALANCE * 1_000_000_000)
+                            and not row.get("is_suspicious")
+                            and not (row_tags & BANNED_WHALE_TAGS)
+                        ):
+                            seen_wallets.add(w)
+                            candidates.append({
+                                "wallet": w,
+                                "source": DiscoverySource.GMGN.value,
+                                "token": ba,
+                                "token_symbol": bs,
+                                "detail": f"GMGN Top Profitable smart_degen Trader ({bs or ba[:6]})",
+                                "observed_at": _parse_timestamp(row.get("last_active_timestamp")) or time.time(),
+                            })
+                            if len(candidates) >= limit:
+                                break
+
+            # Second: fill remaining slots with lowest-frequency makers from smartmoney stream
+            maker_counts: Dict[str, int] = defaultdict(int)
+            first_trade_by_maker: Dict[str, Tuple[int, Dict[str, Any]]] = {}
+            for idx, t in enumerate(trades):
                 maker = t.get("maker")
-                if maker and len(maker) >= 32 and maker not in seen:
-                    seen.add(maker)
-                    candidates.append({
-                        "wallet": maker,
-                        "source": DiscoverySource.GMGN.value,
-                        "token": t.get("base_address", ""),
-                        "token_symbol": t.get("base_symbol", ""),
-                        "detail": "Live GMGN Smart Money Maker",
-                        "observed_at": _parse_timestamp(
-                            t.get("timestamp") or t.get("created_at") or t.get("block_timestamp")
-                        ) or time.time(),
-                    })
-                    if len(candidates) >= limit:
-                        break
+                if maker and len(maker) >= 32 and maker not in seen_wallets:
+                    maker_counts[maker] += 1
+                    if maker not in first_trade_by_maker:
+                        first_trade_by_maker[maker] = (idx, t)
+
+            ordered_makers = sorted(
+                first_trade_by_maker.keys(),
+                key=lambda m: (maker_counts[m], first_trade_by_maker[m][0]),
+            )
+            for maker in ordered_makers:
+                if len(candidates) >= limit:
+                    break
+                _, t = first_trade_by_maker[maker]
+                seen_wallets.add(maker)
+                candidates.append({
+                    "wallet": maker,
+                    "source": DiscoverySource.GMGN.value,
+                    "token": t.get("base_address", ""),
+                    "token_symbol": t.get("base_symbol", ""),
+                    "detail": "Live GMGN Smart Money Maker",
+                    "observed_at": _parse_timestamp(
+                        t.get("timestamp") or t.get("created_at") or t.get("block_timestamp")
+                    ) or time.time(),
+                })
 
         log.info(f"[Channel 1 - GMGN] Discovered {len(candidates)} smart money candidates.")
     except subprocess.TimeoutExpired:
@@ -833,13 +948,13 @@ async def run_omni_whale_discovery(
         meta = wallet_profiles_map[w]
         sources_list = sorted(meta["sources"])
 
-        # Fetch profile
+        # Fetch profile (deep_scan=False during bulk discovery since safety checks only 7d stats)
         profile = await asyncio.to_thread(
             whale_scanner_core.fetch_wallet_profile,
             w,
             use_cache=True,
-            deep_scan=True,
-            rate_sleep=0.3
+            deep_scan=False,
+            rate_sleep=1.5
         )
 
         if not profile:
@@ -894,9 +1009,23 @@ async def run_omni_whale_discovery(
                     profile = nansen_profile
                     nansen_profiles_used += 1
 
-        # Enrich profile with omni-channel metadata
-        profile["discovery_sources"] = sources_list
-        profile["channel_details"] = list(meta["details"])
+        # Enrich profile with omni-channel metadata, preserving previously corroborated sources
+        prior_entry = existing_dict.get(w, {}) or {}
+        if not (profile.get("7d") or {}) and (prior_entry.get("7d") or {}):
+            for k in ("1d", "7d", "30d", "native_balance", "tags", "performance_source", "performance_fetched_at"):
+                if k in prior_entry and prior_entry[k]:
+                    profile[k] = prior_entry[k]
+        prior_sources = [
+            s for s in (prior_entry.get("discovery_sources", []) or [])
+            if s and str(s).lower() != DiscoverySource.LOCAL_HISTORY.value
+        ]
+        merged_sources = sorted(set(prior_sources) | set(sources_list))
+        if merged_sources != [DiscoverySource.LOCAL_HISTORY.value] and DiscoverySource.LOCAL_HISTORY.value in merged_sources and len(merged_sources) > 1:
+            merged_sources = [s for s in merged_sources if s != DiscoverySource.LOCAL_HISTORY.value]
+        profile["discovery_sources"] = merged_sources
+        prior_details = list(prior_entry.get("channel_details", []) or [])
+        merged_details = list(dict.fromkeys(prior_details + list(meta["details"])))
+        profile["channel_details"] = merged_details
         if profile.get("performance_source") == "nansen_profiler_pnl_summary":
             profile["channel_details"].append("7D performance verified by Nansen Profiler")
         profile["discovery_tokens"] = sorted(set(meta["tokens"]))

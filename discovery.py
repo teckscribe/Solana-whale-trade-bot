@@ -16,6 +16,8 @@ import httpx
 import logging
 import asyncio
 from solana.rpc.async_api import AsyncClient
+import connection_pool
+import settings_manager
 
 # Initialize logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -25,33 +27,30 @@ GECKO_TRENDING_API = "https://api.geckoterminal.com/api/v2/networks/solana/trend
 
 async def get_trending_tokens(limit=3):
     """
-    Fetches trending tokens from GeckoTerminal by querying trending pools on Solana.
+    Fetches trending tokens from GeckoTerminal by querying trending pools on Solana
+    via the shared rate-budgeted connection pool.
     """
     log.info("Fetching trending tokens from GeckoTerminal...")
     trending_tokens = []
     
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(GECKO_TRENDING_API, timeout=10.0)
-            if response.status_code == 200:
-                data = response.json()
-                pools = data.get("data", [])
-                
-                for pool in pools[:limit]:
-                    # Extract the base token ID which looks like solana_EPjFWdd5...
-                    token_id = pool.get("relationships", {}).get("base_token", {}).get("data", {}).get("id", "")
-                    if token_id.startswith("solana_"):
-                        token_address = token_id.replace("solana_", "")
-                        
-                        pool_name = pool.get("attributes", {}).get("name", "Unknown")
-                        # e.g., "FOO / SOL" -> symbol "FOO"
-                        symbol = pool_name.split(" / ")[0] if " / " in pool_name else "Unknown"
-                        
-                        if token_address:
-                            trending_tokens.append({"address": token_address, "symbol": symbol})
-                            log.info(f"Discovered trending token: {symbol} ({token_address})")
-            else:
-                log.error(f"GeckoTerminal API error: {response.status_code}")
+        data = await connection_pool.gecko_get(GECKO_TRENDING_API)
+        if data:
+            pools = data.get("data", [])
+            
+            for pool in pools[:limit]:
+                # Extract the base token ID which looks like solana_EPjFWdd5...
+                token_id = pool.get("relationships", {}).get("base_token", {}).get("data", {}).get("id", "")
+                if token_id.startswith("solana_"):
+                    token_address = token_id.replace("solana_", "")
+                    
+                    pool_name = pool.get("attributes", {}).get("name", "Unknown")
+                    # e.g., "FOO / SOL" -> symbol "FOO"
+                    symbol = pool_name.split(" / ")[0] if " / " in pool_name else "Unknown"
+                    
+                    if token_address:
+                        trending_tokens.append({"address": token_address, "symbol": symbol})
+                        log.info(f"Discovered trending token: {symbol} ({token_address})")
     except Exception as e:
         log.error(f"Failed to fetch trending tokens: {e}")
         
@@ -69,7 +68,9 @@ async def extract_whales_from_token(token_address, rpc_client: AsyncClient, max_
         pubkey = Pubkey.from_string(token_address)
         
         # 1. Get recent signatures for the token mint address
-        sig_response = await rpc_client.get_signatures_for_address(pubkey, limit=50)
+        sig_response = await connection_pool.rpc_call(
+            lambda: rpc_client.get_signatures_for_address(pubkey, limit=50)
+        )
         
         signatures_data = sig_response.value if hasattr(sig_response, 'value') else sig_response
         
@@ -77,14 +78,20 @@ async def extract_whales_from_token(token_address, rpc_client: AsyncClient, max_
             return set()
             
         signer_counts = {}
+        try:
+            min_vol = float(settings_manager.get("MIN_WHALE_SOL_VOLUME"))
+        except Exception:
+            min_vol = float(os.getenv("MIN_WHALE_SOL_VOLUME", "5.0"))
         
         for sig_info in signatures_data[:20]:
             try:
                 # Fetch parsed transaction to see who signed it (the trader)
-                tx_resp = await rpc_client.get_transaction(
-                    sig_info.signature, 
-                    encoding="jsonParsed", 
-                    max_supported_transaction_version=0
+                tx_resp = await connection_pool.rpc_call(
+                    lambda s=sig_info.signature: rpc_client.get_transaction(
+                        s, 
+                        encoding="jsonParsed", 
+                        max_supported_transaction_version=0
+                    )
                 )
                 tx_data = tx_resp.value if hasattr(tx_resp, 'value') else tx_resp
                 
@@ -133,16 +140,18 @@ async def extract_whales_from_token(token_address, rpc_client: AsyncClient, max_
                                 sol_delta = abs(pre_sol - post_sol) / 1_000_000_000 # Convert lamports to SOL
                                 
                                 # Only count them if they traded >= MIN_WHALE_SOL_VOLUME
-                                min_vol = float(os.getenv("MIN_WHALE_SOL_VOLUME", "5.0"))
                                 if sol_delta >= min_vol:
                                     signer_counts[owner] = signer_counts.get(owner, 0) + 1
                                 else:
-                                    log.info(f"Skipping trader {owner} - SOL Volume ({sol_delta:.2f}) < MIN_WHALE_SOL_VOLUME ({min_vol})")
+                                    log.debug(f"Skipping trader {owner} - SOL Volume ({sol_delta:.2f}) < MIN_WHALE_SOL_VOLUME ({min_vol})")
                             
                 # Sleep briefly to avoid hitting Helius rate limits on heavy RPC calls
                 await asyncio.sleep(0.1)
             except Exception as e:
-                log.warning(f"Failed to parse tx: {e}")
+                if "UnsupportedTransactionVersion" in str(e):
+                    log.debug(f"Skipping unsupported tx version: {e}")
+                else:
+                    log.warning(f"Failed to parse tx: {e}")
                 continue
                 
         # Filter out bots/routers: real whales don't usually swap the same token > 3 times in 20 recent txs

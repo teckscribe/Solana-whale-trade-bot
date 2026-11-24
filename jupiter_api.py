@@ -17,7 +17,7 @@ import asyncio
 from typing import Dict, Any, Optional, Tuple, Set
 
 from telegram_notifier import send_error_alert
-from connection_pool import get_client, dex_get, jupiter_get, get_rpc_client
+from connection_pool import get_client, dex_get, jupiter_get, get_rpc_client, RPC_BUDGET, DEXSCREENER_BUDGET
 
 log = logging.getLogger("JupiterAPI")
 
@@ -176,7 +176,7 @@ async def get_token_decimals(mint: str) -> Optional[int]:
         return _decimals_cache[mint]
 
     try:
-        rpc_client = await get_rpc_client()
+        await RPC_BUDGET.acquire(priority="high")
         # Fast RPC call using shared client
         rpc_url = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com").strip()
         payload = {"jsonrpc": "2.0", "id": 1, "method": "getTokenSupply", "params": [mint]}
@@ -304,6 +304,7 @@ async def get_live_price(token_address: str) -> float:
         return 0.0
 
     try:
+        await DEXSCREENER_BUDGET.acquire(priority="high")
         url = f"{DEXSCREENER_PRICE_API}/{token_address}"
         client = await get_client()
         resp = await client.get(url, timeout=5.0)

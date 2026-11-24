@@ -181,6 +181,18 @@ def get_whitelist_set() -> frozenset:
     return _whitelist_set
 
 
+def add_whale(wallet: str) -> bool:
+    """Adds a single whale to the discovery database if not already known. Returns True if added."""
+    wallet = str(wallet or "").strip()
+    if len(wallet) < 32:
+        return False
+    with _lock:
+        if wallet in _whitelist_data or wallet in _discovery_data:
+            return False
+        add_whales({wallet})
+        return True
+
+
 def add_whales(new_wallets: set):
     """Adds new whales to the discovery database (only if not already known)."""
     with _lock:

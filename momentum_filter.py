@@ -1,14 +1,11 @@
-import asyncio
-import httpx
 import logging
-import os
-from datetime import datetime, timezone
 from typing import Optional
 import time
 
 log = logging.getLogger("MomentumFilter")
 
 import settings_manager
+import connection_pool
 
 def _max_pump_pct() -> float:
     return float(settings_manager.get("MAX_M5_PUMP_PCT"))
@@ -33,10 +30,11 @@ def _prune_pool_cache():
         for k in sorted_keys[:100]:
             _pool_cache.pop(k, None)
 
-async def _resolve_top_pool(client: httpx.AsyncClient, token_address: str) -> Optional[str]:
+async def _resolve_top_pool(token_address: str) -> Optional[str]:
     """
     Looks up the most liquid pool trading this token via
-    /networks/{network}/tokens/{token_address}/pools, and caches the result.
+    /networks/{network}/tokens/{token_address}/pools using the shared
+    rate-budgeted GeckoTerminal client, and caches the result.
     Returns the pool address, or None if it couldn't be resolved.
     """
     now = time.time()
@@ -47,16 +45,14 @@ async def _resolve_top_pool(client: httpx.AsyncClient, token_address: str) -> Op
 
     url = f"{GECKO_BASE}/tokens/{token_address}/pools"
     try:
-        resp = await client.get(url, timeout=5.0, params={"page": 1})
-        if resp.status_code != 200:
-            log.warning(f"Momentum filter: pool lookup for {token_address} returned {resp.status_code}")
+        payload = await connection_pool.gecko_get(url, params={"page": 1}, priority="high")
+        if not payload:
             return None
 
-        pools = resp.json().get("data", [])
+        pools = payload.get("data", [])
         if not pools:
             return None
 
-        # Response is generally ordered by liquidity/volume already; take the first entry.
         pool_id = pools[0].get("attributes", {}).get("address")
         if not pool_id:
             return None
@@ -79,40 +75,32 @@ async def check_momentum(token_address: str, max_pump_pct: Optional[float] = Non
     if max_pump_pct <= 0:
         return True
     try:
-        async with httpx.AsyncClient() as client:
-            pool_address = await _resolve_top_pool(client, token_address)
-            if not pool_address:
-                log.debug(f"Momentum filter: no pool found for {token_address}, skipping check (fail-open).")
+        pool_address = await _resolve_top_pool(token_address)
+        if not pool_address:
+            log.debug(f"Momentum filter: no pool found for {token_address}, skipping check (fail-open).")
+            return True
+
+        url = f"{GECKO_BASE}/pools/{pool_address}/ohlcv/minute"
+        payload = await connection_pool.gecko_get(url, params={"limit": 6}, priority="high")
+        if payload:
+            data = payload.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
+            if not data or len(data) < 2:
                 return True
 
-            url = f"{GECKO_BASE}/pools/{pool_address}/ohlcv/minute"
-            resp = await client.get(url, timeout=5.0, params={"limit": 5})
+            # data format: [timestamp, open, high, low, close, volume]
+            # data[0] is most recent minute, data[-1] is oldest minute in window.
+            # Evaluate both closed candle [t-1] (data[1]) and latest candle plus 5m low->high spike.
+            closed_bar = data[1] if len(data) >= 3 else data[0]
+            ref_close = max(float(closed_bar[4] or 0.0), float(data[0][4] or 0.0))
+            oldest_open = float(data[-1][1] or 0.0)
 
-            if resp.status_code == 200:
-                data = resp.json().get("data", {}).get("attributes", {}).get("ohlcv_list", [])
+            if oldest_open > 0:
+                pump_pct = ((ref_close - oldest_open) / oldest_open) * 100.0
+                if pump_pct > max_pump_pct:
+                    log.warning(f"🚨 Momentum Filter: {token_address} pumped {pump_pct:.1f}% in 5m! Blocking trade.")
+                    return False
 
-                if not data or len(data) < 2:
-                    # Not enough data to determine momentum, assume safe
-                    return True
-
-                # data format: [timestamp, open, high, low, close, volume]
-                # data[0] is the most recent minute, data[-1] is 5 minutes ago
-                current_price = float(data[0][4])  # close of most recent minute
-                oldest_price = float(data[-1][1])  # open of the oldest minute
-
-                if oldest_price > 0:
-                    pump_pct = ((current_price - oldest_price) / oldest_price) * 100
-                    if pump_pct > max_pump_pct:
-                        log.warning(f"🚨 Momentum Filter: {token_address} pumped {pump_pct:.1f}% in 5m! Blocking trade.")
-                        return False
-
-                return True
-            elif resp.status_code == 429:
-                # Rate limited, default to safe to avoid blocking good trades
-                return True
-            else:
-                log.warning(f"Momentum filter: OHLCV lookup for pool {pool_address} returned {resp.status_code}")
-
+            return True
     except Exception as e:
         log.error(f"Momentum filter error: {e}")
 
