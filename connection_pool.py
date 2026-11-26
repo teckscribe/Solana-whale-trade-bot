@@ -301,10 +301,13 @@ async def jupiter_get(url: str, params: Optional[Dict[str, Any]] = None, priorit
         log.error(f"Jupiter GET failed: {e}")
         return None
 
+_nansen_disabled_until: float = 0.0
+
 async def nansen_post(url: str, json_data: Dict[str, Any], priority: str = 'normal') -> Optional[Dict[str, Any]]:
-    """Rate-budgeted POST to Nansen API; disabled when no API key is configured."""
+    """Rate-budgeted POST to Nansen API; disabled when no API key is configured or on 401/403."""
+    global _nansen_disabled_until
     api_key = os.getenv("NANSEN_API_KEY", "").strip()
-    if not api_key:
+    if not api_key or time.time() < _nansen_disabled_until:
         return None
 
     await NANSEN_BUDGET.acquire(priority=priority)
@@ -320,6 +323,10 @@ async def nansen_post(url: str, json_data: Dict[str, Any], priority: str = 'norm
             },
             timeout=20.0,
         )
+        if response.status_code in (401, 403):
+            _nansen_disabled_until = time.time() + 21600.0
+            log.warning(f"Nansen API returned HTTP {response.status_code} ({url}); pausing Nansen queries for 6h.")
+            return None
         response.raise_for_status()
         return response.json()
     except Exception as e:

@@ -276,6 +276,10 @@ async def fetch_gmgn_smart_money(
         if os.name == "nt":
             run_options["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+        if whale_scanner_core.is_gmgn_rate_limited():
+            log.info("[Channel 1 - GMGN] GMGN CLI is in rate-limit cooldown; skipping CLI call.")
+            return []
+
         config_check = await asyncio.to_thread(
             subprocess.run,
             [executable, "config", "--check"],
@@ -286,12 +290,15 @@ async def fetch_gmgn_smart_money(
             log.error("[Channel 1 - GMGN] gmgn-cli config check failed; skipping GMGN channel.")
             return []
 
+        await asyncio.sleep(1.5)
+        whale_scanner_core._last_gmgn_call_at = time.time()
         proc = await asyncio.to_thread(
             subprocess.run,
             [executable, "track", "smartmoney", "--chain", "sol", "--limit", "200", "--raw"],
             timeout=30.0,
             **run_options,
         )
+        whale_scanner_core._last_gmgn_call_at = time.time()
 
         if proc.returncode == 0 and proc.stdout:
             data = json.loads(proc.stdout.strip())

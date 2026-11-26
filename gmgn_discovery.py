@@ -369,12 +369,18 @@ async def run_gmgn_discovery() -> set:
         log.info(f"After duplicate check, {len(new_candidates)} wallets need stat evaluation.")
         
         # 3. Fetch detailed stats and run full parameter cross-check on new candidates
+        import whale_scanner_core
+        await asyncio.sleep(2.0)
         for addr in new_candidates:
+            if whale_scanner_core.is_gmgn_rate_limited():
+                log.info("GMGN CLI is in rate-limit cooldown; deferring remaining candidates to next cycle.")
+                break
+
             detailed_stats = await get_wallet_stats(addr)
-            # Record in discovery DB as NEUTRAL so we don't repeatedly re-query the same candidate
-            whale_manager.add_whales({addr})
 
             if detailed_stats:
+                # Only record in discovery DB once stats were actually fetched
+                whale_manager.add_whales({addr})
                 passed, rejections, detailed_stats = cross_check_wallet_parameters(addr, detailed_stats)
                 winrate = detailed_stats.get("winrate_7d", 0.0)
                 total_trades = detailed_stats.get("total_trades_7d", 0)
